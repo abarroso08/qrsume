@@ -1,0 +1,604 @@
+<!--
+    Author: Alejandro Barroso Bueso
+--!>
+<!-- Incluimos el header -->
+<?php
+include "assets/head.php";
+
+$stmt_views = $db->prepare("UPDATE personalinfo SET visits = visits + 1 WHERE user_id = ?");
+$stmt_views ->execute([$user_id]);
+
+if(!isset($_GET['username'])){
+    ?>
+    <!-- index.php -->
+<?php
+// Include the database connection if needed for this page
+//include 'includes/db.php';
+?>
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+  h1,h2{
+      font-family: "inter"; !important
+      color:#2c3d51; !important
+  }
+    .bg-blue-button {
+    background-color: #1e40af !important;
+    }
+  </style>
+</head>
+<body>
+<?php
+include("assets/nav2.php");
+?>
+
+<section class="container py-3 bg-body" >
+  <div class="row align-items-center">
+    
+    <!-- Left: Resume Preview Image -->
+    <div class="col-md-6 text-center mb-4 mb-md-0">
+      <img 
+        src="/images/resume_landing_barroso.webp" 
+        alt="Resume preview" 
+        class="img-fluid mt-3"
+        style="max-height:80vh"
+      >
+    </div>
+
+    <!-- Right: Hero Text Content -->
+    <div class="col-md-6 text-center text-md-start">
+      <h5 class="text-uppercase text-secondary mb-2 fw-bold" style="letter-spacing: 2px;">Dont. Waste. Your. Time.</h5>
+      <h1 class="fw-bold mb-3 display-3">Create a resume in 5 minutes</h1>
+      <p class="mb-1 fw-semibold">Just type your info, we’ll do the rest.</p>
+      <p class="mb-4 fw-semibold">No design. No code. Instant result.</p>
+      <div>
+        <a href="https://qrsume.com/assets/register.php" class="btn btn-warning py-2 px-3 fw-bold me-2">Build my resume</a>
+        <a href="#templates" class="btn btn-primary py-2 px-3 fw-bold bg-blue-button">Explore Templates</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<section class="py-5 my-5 text-center">
+  <div class="container">
+    <!-- Title -->
+    <h2 class="fw-bold mb-3" style="font-size: 2.5rem;">
+      Only <span class="fw-bold display-3">3</span> Steps
+    </h2>
+
+    <!-- Subtitle -->
+    <p class=" mb-5 fs-5 text-muted">
+      Check out how simple it is to generate a resume and personal webpage
+      <span class="fw-bold text-decoration-underline">at the same time.</span>
+    </p>
+
+    <!-- Steps Grid -->
+    <div class="row justify-content-center g-4">
+      <!-- Step 1 -->
+      <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+        <div class="px-4 py-5 rounded h-100 shadow-sm" style="background-color:#e0e7ff">
+          <div class="fw-bold mb-2" style="font-size: 2.5rem; color: #1e40af;">1</div>
+          <div class="fw-bold fs-5">Create Account</div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+        <div class="px-4 py-5  rounded h-100 shadow-sm" style="background-color:#e0e7ff">
+          <div class="fw-bold mb-2" style="font-size: 2.5rem; color: #1e40af;">2</div>
+          <div class="fw-bold fs-5">Add Your Info</div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+        <div class="px-4 py-5  rounded h-100 shadow-sm" style="background-color:#e0e7ff">
+          <div class="fw-bold mb-2" style="font-size: 2.5rem; color: #1e40af;">3</div>
+          <div class="fw-bold fs-5">Get Resume & Website</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+<section class="py-5 my-5 text-center" id="templates">
+  <div class="container">
+    <!-- Header -->
+    <h2 class="fw-bold mb-3" >
+      Undecided? We Already Thought That
+    </h2>
+    <p class="text-muted fs-5 mb-5">
+      Use one of our templates: optimized to impress and easy to customize.
+    </p>
+
+    <!-- Template Previews -->
+    <div class="row justify-content-center g-4">
+      <!-- Template 1 -->
+      <div class="col-10 col-md-6 col-lg-5">
+        <img 
+          src="images/template1.webp" 
+          alt="Template Example 1" 
+          class="img-thumbnail rounded shadow"
+          style="max-height:400px;"
+        >
+      </div>
+
+      <!-- Template 2 -->
+      <div class="col-10 col-md-6 col-lg-5 ">
+        <img 
+          src="images/template2.webp" 
+          alt="Template Example 2" 
+          class="img-thumbnail rounded shadow"
+          style="max-height:400px;"
+        >
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="py-5 my-5 text-center">
+  <div class="container">
+    <!-- Section Title -->
+    <h2 class="fw-bold mb-5">Why QRsume?</h2>
+
+    <!-- Icon Boxes -->
+    <div class="row justify-content-center g-4">
+      
+      <!-- Box 1 -->
+      <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100">
+          <img src="https://img.icons8.com/ios-filled/50/1e40af/source-code.png" alt="Code Icon" style="height: 40px;">
+          <h5 class="fw-semibold mt-3 mb-1">Resume in 5 min</h5>
+          <p class="text-muted mb-0">Fast and effortless resume creation.</p>
+        </div>
+      </div>
+
+      <!-- Box 2 -->
+      <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100">
+          <img src="https://img.icons8.com/ios-filled/50/1e40af/internet--v1.png" alt="Website Icon" style="height: 40px;">
+          <h5 class="fw-semibold mt-3 mb-1">Website & Blog</h5>
+          <p class="text-muted mb-0">Stand out with a personal portfolio and upload unlimited projects.</p>
+        </div>
+      </div>
+
+      <!-- Box 3 -->
+      <div class="col-10 col-sm-6 col-md-4 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100">
+          <img src="https://img.icons8.com/ios-filled/50/1e40af/us-dollar.png" alt="Dollar Icon" style="height: 40px;">
+          <h5 class="fw-semibold mt-3 mb-1">Free for Students</h5>
+          <p class="text-muted mb-0">Get started without paying a cent.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<section class="py-5 my-5 text-center">
+  <div class="container">
+    <!-- Title -->
+    <h2 class="fw-bold mb-4">Our Vision</h2>
+
+    <!-- Quote 1 -->
+    <p class="fst-italic fw-semibold mx-auto" style="max-width: 750px;">
+      “The <span class="fw-bold text-decoration-underline">Resume</span> is the index, the 
+      <span class="fw-bold text-decoration-underline">QR</span> is the gateway, and the 
+      <span class="fw-bold text-decoration-underline">Web</span> is the full story”
+    </p>
+
+    <!-- Centered Flow -->
+    <h2 class="fw-bold my-5" style="font-size: 2rem;">
+      Resume → QR → Web
+    </h2>
+
+    <!-- Quote 2 -->
+    <p class="fst-italic mx-auto" style="max-width: 700px;">
+      “Bring your CV to life: a short version on paper, a full version online”
+    </p>
+  </div>
+</section>
+
+
+<section class="py-5 my-5 text-center">
+  <div class="container">
+    <!-- Section Title -->
+    <h2 class="fw-bold mb-5">Doubts Are Not Allowed</h2>
+
+    <!-- FAQ Cards -->
+    <div class="row justify-content-center g-4">
+      <!-- Card 1 -->
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100 text-start">
+          <h5 class="fw-semibold">Can I export to PDF or Word?</h5>
+          <p class="text-muted mb-0">Yes. Download to PDF instantly, or to Word if you want to personalize it later.</p>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100 text-start">
+          <h5 class="fw-semibold">Is it free?</h5>
+          <p class="text-muted mb-0">Yes. Premium features are coming soon</p>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100 text-start">
+          <h5 class="fw-semibold">Do I need to code?</h5>
+          <p class="text-muted mb-0">No. Just type. We handle the design and tech.</p>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="p-4 rounded-4 shadow-sm h-100 text-start">
+          <h5 class="fw-semibold">Can I edit it later?</h5>
+          <p class="text-muted mb-0">Yes. Log in anytime to update your info, CV or website instantly.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="d-flex justify-content-center gap-3 mt-5 flex-wrap">
+      <a href="contact.php" class="btn px-4 py-2 fw-semibold text-white" style="background-color: #1e40af;">
+        Contact Us
+      </a>
+      <a href="https://qrsume.com/assets/register.php" class="btn px-4 py-2 fw-semibold" style="background-color: #facc15; color: #1e293b; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+        Build my resume
+      </a>
+    </div>
+  </div>
+</section>
+
+
+
+     <!-- Include footer -->
+     <?php include 'assets/footer.php'; ?>
+     <!-- Cookie Consent Popup -->
+<div id="cookie-popup" class="position-fixed bottom-0 start-50 translate-middle-x bg-dark text-white p-3 rounded shadow-lg"
+     style="display: none; width: 90%; max-width: 400px; z-index: 1000;">
+    <p class="mb-2">
+        🍪 We use cookies to enhance your experience. You can accept or decline tracking.
+    </p>
+    <div class="d-flex justify-content-between">
+        <button id="accept-cookies" class="btn btn-primary btn-sm">Accept</button>
+        <button id="decline-cookies" class="btn btn-secondary btn-sm">Decline</button>
+        <a href="/privacy-policy.php" class="text-white small">Learn More</a>
+    </div>
+</div>
+
+
+<!-- JavaScript to Show/Hide Cookie Popup -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    // Check if cookies were accepted or declined
+    if (!document.cookie.includes("new_visitor") && !document.cookie.includes("cookie_declined")) {
+        document.getElementById("cookie-popup").style.display = "block";
+    }
+
+    // Accept cookies
+    document.getElementById("accept-cookies").addEventListener("click", function () {
+        document.cookie = "new_visitor=1; path=/; max-age=" + (365 * 24 * 60 * 60); // Store for 1 year
+        document.getElementById("cookie-popup").style.display = "none";
+        location.reload(); // Reload to apply tracking
+    });
+
+    // Decline cookies
+    document.getElementById("decline-cookies").addEventListener("click", function () {
+        document.cookie = "cookie_declined=1; path=/; max-age=" + (365 * 24 * 60 * 60); // Store for 1 year
+        document.getElementById("cookie-popup").style.display = "none";
+    });
+});
+</script>
+
+    <?php
+}else{
+include('assets/stats.php');
+
+$username = $_GET['username'] ?? '';
+$sessionUsername = $_SESSION['username'] ?? '';
+
+// Only proceed if we're visiting someone else's profile
+if ($username !== '' && $username !== $sessionUsername) {
+    // Fetch the profile owner's user ID
+    $stmt = $db->prepare("SELECT id FROM users WHERE username = :uname");
+    $stmt->execute([':uname' => $username]);
+    $user_id = $stmt->fetchColumn();
+
+    if ($user_id !== false && $user_id !== null) {
+        // Always record a page view
+        recordPageView($db, $user_id);
+
+        // Conditionally record a QR scan
+        if (isset($_GET['qr_scan']) && $_GET['qr_scan'] === 'true') {
+            recordQRScan($db, $user_id);
+        }
+    }
+}
+
+
+?>
+
+<style>
+    .sidebar-title{
+        width: 75%;
+    }
+</style>
+
+
+
+</head>
+
+<body>
+    
+     <?php include "assets/nav.php"; ?>
+     <a href="https://QRsume.com" target="_blank"
+   style="
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: #007bff;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 50px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 14px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+        transition: background-color 0.3s, transform 0.2s;
+        z-index:100;
+   "
+   onmouseover="this.style.backgroundColor='#0056b3'; this.style.transform='scale(1.1)';"
+   onmouseout="this.style.backgroundColor='#007bff'; this.style.transform='scale(1)';">
+   Create Your Account
+</a>
+
+     <div class="container-xxl">
+          
+          
+
+
+          <div class="row "> <!-- align-items-start -->
+               <!-- Left part(Color) -->
+               <div class="col-md-4 text-white p-0 order-sm-first order-last pt-5" style=" background-color: var(--primary);"> <!--position:sticky; top:0;-->
+                   <div class="pb-4">
+                       <div class="container-fluid w-75">
+                             <img class="img-fluid mb-3" loading="lazy" style="border-radius:9999px; object-fit:contain;" src="images/<?php echo htmlspecialchars   ($personalinfo["personal_photo"]); ?>" alt="Personal photo">
+                        </div>
+                        <div class="container-fluid justify-content-around d-flex w-75">
+                            <?php if (!empty($contactinfo["email"]) && $visibility["email"] == 1): ?>
+                                <a href="mailto:<?php echo htmlspecialchars($contactinfo["email"]); ?>">
+                                    <i class="bi bi-envelope h2 text-white"></i>
+                                </a>
+                            <?php endif; ?>
+                        
+                            <?php if (!empty($contactinfo["github"])): ?>
+                                <a href="<?php echo htmlspecialchars($contactinfo["github"]); ?>">
+                                    <i class="bi bi-github h2 text-white"></i>
+                                </a>
+                            <?php endif; ?>
+                        
+                            <?php if (!empty($contactinfo["linkedin"])): ?>
+                                <a href="<?php echo htmlspecialchars($contactinfo["linkedin"]); ?>">
+                                    <i class="bi bi-linkedin h2 text-white"></i>
+                                </a>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($contactinfo["facebook"])): ?>
+                                <a href="<?php echo htmlspecialchars($contactinfo["facebook"]); ?>">
+                                    <i class="bi bi-facebook h2 text-white"></i>
+                                </a>
+                            <?php endif; ?>
+                        
+                            <?php if (!empty($personalinfo["cv_url"])): ?>
+                                <a href="<?php echo htmlspecialchars($personalinfo["cv_url"]); ?>">
+                                    <i class="bi bi-file-earmark-person h2 text-white"></i>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                   </div>
+                   
+                    <!-- Contact -->
+                    <div class="row">
+                        <?php if (!empty($results["contactinfo"]) && array_sum($visibility)>0  ): ?>
+                         <div class=" border-bottom border-2 border-white my-3 ms-5">
+                              <h2 class="fw-bold">Contact</h2>
+                         </div>
+                         <div class="ps-5 mt-3">
+                             <ul class="list-unstyled">
+                                 <?php if (!empty($contactinfo["phone_number"]) && $visibility["phone"] == 1): ?>
+                                     <li>
+                                         <h3 class="h4">Phone:</h3>
+                                         <p>
+                                             <a class="h6 text-white text-decoration-none" 
+                                                href="tel:+<?= htmlspecialchars($contactinfo["phone_number"], ENT_QUOTES, 'UTF-8') ?>">
+                                                 <?= htmlspecialchars($contactinfo["phone_number"], ENT_QUOTES, 'UTF-8') ?>
+                                             </a>
+                                         </p>
+                                     </li>
+                                 <?php endif; ?>
+                         
+                                 <?php if (!empty($contactinfo["email"]) && $visibility["email"] == 1): ?>
+                                     <li>
+                                         <h3 class="h4">Email:</h3>
+                                         <p>
+                                             <a class="h6 text-white text-decoration-none" 
+                                                href="mailto:<?= htmlspecialchars($contactinfo["email"], ENT_QUOTES, 'UTF-8') ?>">
+                                                 <?= htmlspecialchars($contactinfo["email"], ENT_QUOTES, 'UTF-8') ?>
+                                             </a>
+                                         </p>
+                                     </li>
+                                 <?php endif; ?>
+                             </ul>
+                         </div>
+                        <?php endif; ?>
+                    </div>
+                    <!-- Aptitudes -->
+                    <div class="row">
+                        <?php if (!empty($results["aptitudes"])): ?>
+                         <div class=" border-bottom border-2 border-white my-3 ms-5 sidebar-title">
+                              <h2 class="fw-bold">Aptitudes</h2>
+                         </div>
+                         <div class="mt-3 ps-5">
+                              <ul>
+                                   <?php foreach ($results["aptitudes"] as $aptitude) : ?>
+                                        <li class="mb-3"> <?= htmlspecialchars($aptitude["aptitude"], ENT_QUOTES, 'UTF-8') ?> </li>
+                                   <?php endforeach; ?>
+                              </ul>
+                         </div>
+                        <?php endif; ?>
+
+                    </div>
+                    <!-- Languages -->
+                    <div class="row">
+                        <?php if (!empty($results["languages"])): ?>
+                         <div class=" border-bottom border-2 border-white my-3 ms-5 sidebar-title">
+                              <h2 class="fw-bold">Languages</h2>
+                         </div>
+                         <div class="mt-3 ps-5">
+                              <ul>
+                                   <?php foreach ($results["languages"] as $language) : ?>
+                                        <li class="mb-3"> <?= htmlspecialchars($language["language"], ENT_QUOTES, 'UTF-8') ?> ( <?= htmlspecialchars($language["level"], ENT_QUOTES, 'UTF-8') ?> ) </li>
+                                   <?php endforeach; ?>
+                              </ul>
+                         </div>
+                        <?php endif; ?>
+                    </div>
+                    <!-- Download CV -->
+                    <div class="row mb-5" id="cv">
+                        <?php if (!empty($personalinfo["cv_url"])): ?>
+                         <div class=" border-bottom border-2 border-white my-3 ms-4 w-100">
+                              <h2 class="fw-bold w-100"><?= $personalinfo['personal_name'] ?>'s Resume</h2>
+                         </div>
+                         <div class="text-center my-3">
+                             <a href="https://qrsume.com/<?= htmlspecialchars($personalinfo['cv_url']) ?>" 
+                                class="btn btn-primary" 
+                                target="_blank" 
+                                download="CV.pdf">
+                                <i class="bi bi-download me-2"></i>Download
+                             </a>
+                         </div>
+
+                        <?php endif; ?> 
+                    </div>
+               </div>
+
+               <!-- Right part(white) -->
+               <div class="col-md-8 container-fluid p-0 ps-2 ps-md-5 pe-3 pe-md-5 pt-5" style="color: var(--primary);">
+                   <div class="w-75 mx-auto">
+                         <h1 class="pl-5 display-4" style="color:var(--primary);"><span style="font-weight:bold;"><?php echo htmlspecialchars($personalinfo["personal_name"]); ?></span> <span style="font-weight: 300;"><?php echo htmlspecialchars( $personalinfo["personal_lastname"]); ?></span></h1>
+                         <h2 class="pl-5" style="color:var(--primary);"><?php echo htmlspecialchars( $personalinfo["personal_profession"]); ?></h2>
+                         <p style="color:var(--secondary); text-align:justify;">
+                              <?php echo htmlspecialchars($personalinfo["personal_bio"]); ?>
+                         </p>
+                    </div>
+                    <!-- Experience -->
+                    <div class="row" id="experience">
+                        <?php if (!empty($results["experience"])): ?>
+                         <div class="my-2" style=" border-bottom: 2px solid var(--primary);">
+                              <h2 class="fw-bold">Experience</h2>
+                         </div>
+                         <div class="mt-3">
+                              <ul>
+                                   <!-- Add li elements -->
+                                   <?php foreach ($results["experience"] as $experience) : ?>
+                                        <li><?= htmlspecialchars($experience["date"], ENT_QUOTES, 'UTF-8') ?>
+                                             <div class="h5" style="color:var(--secondary)">
+                                                  <?= htmlspecialchars($experience["place_of_work"], ENT_QUOTES, 'UTF-8') ?>
+                                             </div>
+                                             <h3>
+                                                  <?= htmlspecialchars($experience["job_name"], ENT_QUOTES, 'UTF-8') ?>
+                                             </h3>
+                                             <p>
+                                                  <?= htmlspecialchars($experience["brief_description"], ENT_QUOTES, 'UTF-8') ?>
+                                             </p>
+                                        </li>
+                                   <?php endforeach; ?>
+
+
+                              </ul>
+                         </div>
+                        <?php endif; ?>
+                    </div>
+                    <!-- Education -->
+                    <div class="row" id="education">
+                        <?php if (!empty($results["education"])): ?>
+                         <div class=" my-2" style=" border-bottom: 2px solid var(--primary);">
+                              <h2 class="fw-bold">Education</h2>
+                         </div>
+                         <div class="mt-3">
+                              <ul>
+                                   <!-- Add li elements -->
+                                   <?php foreach ($results["education"] as $education) : ?>
+                                        <li><?= htmlspecialchars($education["date"], ENT_QUOTES, 'UTF-8') ?>
+                                             <div class="h5" style="color:var(--secondary)">
+                                                  <?= htmlspecialchars($education["place_of_study"], ENT_QUOTES, 'UTF-8') ?>
+                                             </div>
+                                             <h3>
+                                                  <?= htmlspecialchars($education["name_of_studies"], ENT_QUOTES, 'UTF-8') ?>
+                                             </h3>
+                                             <p>
+                                                  <?= htmlspecialchars($education["brief_description"], ENT_QUOTES, 'UTF-8') ?>
+                                             </p>
+                                        </li>
+                                   <?php endforeach; ?>
+                              </ul>
+                         </div>
+                        <?php endif; ?>
+                    </div>
+                    <!-- Interests -->
+                    <div class="row" id="interest">
+                        <?php if (!empty($results["interests"])): ?>
+                         <div class=" my-2" style=" border-bottom: 2px solid var(--primary);">
+                              <h2 class="fw-bold">Projects</h2>
+                         </div>
+                         <div class="mt-3">
+                              <ul>
+                                   <!-- Add li elements -->
+                                   <?php foreach ($results["interests"] as $interest) : ?>
+                                        <li class="h5"> <?= htmlspecialchars($interest["interest"], ENT_QUOTES, 'UTF-8') ?>:</li>
+                                        <p><?= htmlspecialchars($interest["description"], ENT_QUOTES, 'UTF-8') ?></p>
+                                   <?php endforeach; ?>
+
+                              </ul>
+                         </div>
+                        <?php endif; ?>
+                    </div>
+                    <!--Custom sections-->
+                    <div class="row" id="custom_sections">
+                        <?php if (!empty($results["custom_sections"])): ?>
+                            <?php foreach ($results["custom_sections"] as $section): ?>
+                                <div class="my-2" style="border-bottom: 2px solid var(--primary);">
+                                    <h2 class="fw-bold"><?= htmlspecialchars($section["section_title"], ENT_QUOTES, 'UTF-8') ?></h2>
+                                </div>
+                                <div class="mt-3">
+                                    <p><?= nl2br(htmlspecialchars($section["section_content"], ENT_QUOTES, 'UTF-8')) ?></p>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+               </div>
+
+          </div>
+          <div class=" my-2 text-center h1 p-4 fw-bold" style="border-bottom: 2px solid var(--primary); color: var(--primary);">
+                    Projects</div>
+          <?php include "assets/blog.php"; ?>
+               
+     </div>
+
+     
+
+
+     <?php include "assets/footer.php";} ?>
+     
+
+
+     

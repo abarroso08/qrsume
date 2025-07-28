@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# Allow direct access to existing files and directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Rewrite rule to capture usernames (allowing letters, numbers, underscores, and dots) with a max length of 12
+RewriteRule ^([a-zA-Z0-9_.]{4,25})$ index.php?username=$1 [L,QSA]
+
+# Custom 404 error page for invalid URLs
+ErrorDocument 404 /404.php
