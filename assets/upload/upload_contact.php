@@ -1,6 +1,9 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 
 session_start();
 include('../db.php'); // Ensure database connection
@@ -12,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['
         }
 
         $user_id = $_SESSION['id'];
-        
+
         // ✅ Sanitize input
         $phone_number = cleanInput($_POST['phone_number'] ?? '');
         $email = cleanInput($_POST['email'] ?? '');
@@ -50,4 +53,3 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['
     header("Location: ../error.php?error=" . urlencode("Invalid request."));
     exit();
 }
-?>

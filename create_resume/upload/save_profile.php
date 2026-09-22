@@ -2,8 +2,8 @@
 
 include("../../assets/head.php");
 
-if ($_SERVER["REQUEST_METHOD"] === "POST" 
-    && isset($_POST['action']) 
+if ($_SERVER["REQUEST_METHOD"] === "POST"
+    && isset($_POST['action'])
     && $_POST['action'] === "save_personalinfo") {
 
     if (!isset($_SESSION['id'])) {
@@ -21,8 +21,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     $profession = cleanInput($_POST['personal_profession'] ?? '');
     $bio        = cleanInput($_POST['personal_bio'] ?? '');
 
-    $cv_url = isset($_SESSION['username']) 
-              ? "pdf2.php?username=" . urlencode($_SESSION['username']) 
+    $cv_url = isset($_SESSION['username'])
+              ? "pdf2.php?username=" . urlencode($_SESSION['username'])
               : '';
 
     $data = [
@@ -57,4 +57,3 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     header("Location: https://qrsume.com/create_resume/form_with_login.php?section=0&error=bad_request");
     exit();
 }
-?>

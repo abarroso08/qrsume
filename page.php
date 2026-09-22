@@ -1,6 +1,8 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 include('./assets/head.php');
 
 $page = isset($_GET['web']) ? $_GET['web'] : 'aboutus';
@@ -21,7 +23,7 @@ if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 
 
 <body class="bg-light d-flex flex-column align-items-center justify-content-between" style="min-height:100vh">
-    <?php include("assets/nav2.php");?>
+    <?php include("assets/nav_site.php");?>
     <div class="container py-5" >
         <div><?= $content ?></div>
     </div>

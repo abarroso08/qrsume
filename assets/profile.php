@@ -1,12 +1,14 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 
 include("head.php");
 
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-     header("Location: login.php");
-     exit();
+    header("Location: login.php");
+    exit();
 }
 
 $quick_access_tables = ['personalinfo', 'contactinfo', 'aptitudes', 'education', 'experience', 'interests', 'languages','custom_sections'];
@@ -14,10 +16,10 @@ $quick_access_tables = ['personalinfo', 'contactinfo', 'aptitudes', 'education',
 // Fetch User Data
 $results = [];
 foreach ($quick_access_tables as $table) {
-     $query = "SELECT * FROM `$table` WHERE `user_id` = ?";
-     $stmt = $db->prepare($query);
-     $stmt->execute([$_SESSION['id']]);
-     $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $query = "SELECT * FROM `$table` WHERE `user_id` = ?";
+    $stmt = $db->prepare($query);
+    $stmt->execute([$_SESSION['id']]);
+    $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 $personalinfo = $results['personalinfo'][0] ?? null;
@@ -31,7 +33,7 @@ $photos = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
 <body>
 
-     <?php include("nav.php"); ?>
+     <?php include("nav_profile.php"); ?>
      <div class="row px-2">
                <!-- Static Sidebar -->
                 <div class="col-md-3 position-fixed bg-white border-end p-3 d-none d-md-flex flex-column" 

@@ -131,7 +131,7 @@ $meta_url = "https://qrsume.com/article.php?user_id={$user_id}&id={$article_id}"
     </style>
 
 <body>
-<?php include "assets/nav.php"; ?>
+<?php include "assets/nav_profile.php"; ?>
 
 <div class="container-xxl overflow-hidden">
     <article class="container-fluid col-12 col-md-8 mt-5">
@@ -173,8 +173,8 @@ $meta_url = "https://qrsume.com/article.php?user_id={$user_id}&id={$article_id}"
     <div class="d-flex gap-3 flex-wrap">
         <?php
         $encodedTitle = urlencode($article['article_title']);
-        $encodedUrl = urlencode("https://qrsume.com/article.php?user_id={$user_id}&id={$article_id}");
-        ?>
+$encodedUrl = urlencode("https://qrsume.com/article.php?user_id={$user_id}&id={$article_id}");
+?>
 
         <a class="btn btn-outline-primary" 
            href="https://twitter.com/intent/tweet?text=<?= $encodedTitle ?>&url=<?= $encodedUrl ?>" 

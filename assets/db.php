@@ -1,43 +1,55 @@
 <?php
 
+require_once __DIR__ . '/../config/env.php';
+
+$is_local_dev = php_sapi_name() === 'cli-server'; // true only when served via `php -S` (PHP's built-in dev server)
+
 session_set_cookie_params([
     'lifetime' => 0,  // 0 means it lasts until the browser is closed
     'path' => '/',  // Available across the entire site
-    'domain' => 'qrsume.com', // Make sure this matches your domain
-    'secure' => true, // Ensures session is sent only over HTTPS
+    'domain' => $is_local_dev ? '' : 'qrsume.com', // Make sure this matches your domain
+    'secure' => !$is_local_dev, // Ensures session is sent only over HTTPS
     'httponly' => true, // Prevents JavaScript from accessing the session
     'samesite' => 'Lax' // Prevents CSRF but allows navigation
 ]);
 
 session_start();
-if (isset($errors) && $_SESSION['privilege'] === "admin") {
-    echo("Showing errors");
+if ($is_local_dev) {
     error_reporting(E_ALL);
-    ini_set('display_errors', 1);
+    ini_set('display_errors', '1');
 }
-define('DB_SERVER', '127.0.0.1:3306');
-define('DB_USERNAME', '');
-define('DB_PASSWORD', '');
-define('DB_NAME', '');
+define('DB_SERVER', env('DB_SERVER', '127.0.0.1:3306'));
+define('DB_USERNAME', env('DB_USERNAME', ''));
+define('DB_PASSWORD', env('DB_PASSWORD', ''));
+define('DB_NAME', env('DB_NAME', ''));
 
 //Function to clean inputs
 
-function cleanInput($input) {
-        // Force UTF-8 encoding
-        $input = mb_convert_encoding($input, 'UTF-8', 'auto');
+function cleanInput($input)
+{
+    // Force UTF-8 encoding
+    $input = mb_convert_encoding($input, 'UTF-8', 'auto');
 
-        // Allow letters (with accents), numbers, spaces, and some punctuation
-        $cleaned = preg_replace("/[^a-zA-Z0-9 ñÑáéíóúÁÉÍÓÚüÜ\-.,()?!@#^*_+=:\/•\x0A\x0D]/u", "", trim($input));
-        return $cleaned;
-    }
+    // Allow letters (with accents), numbers, spaces, and some punctuation
+    $cleaned = preg_replace("/[^a-zA-Z0-9 ñÑáéíóúÁÉÍÓÚüÜ\-.,()?!@#^*_+=:\/•\x0A\x0D]/u", "", trim($input));
+    return $cleaned;
+}
 
-/* Attempt to connect to MySQL database */
+/* Attempt to connect to the database */
 try {
-     $db = new PDO("mysql:host=" . DB_SERVER . ";dbname=" . DB_NAME, DB_USERNAME, DB_PASSWORD);
-     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    if ($is_local_dev) {
+        $db = new PDO("sqlite:" . __DIR__ . "/../local_dev.sqlite");
+        $db->exec('PRAGMA foreign_keys = ON');
+        // Shim MySQL-only date functions used across the codebase so raw SQL keeps working against SQLite
+        $db->sqliteCreateFunction('CURDATE', fn () => date('Y-m-d'), 0);
+        $db->sqliteCreateFunction('NOW', fn () => date('Y-m-d H:i:s'), 0);
+    } else {
+        $db = new PDO("mysql:host=" . DB_SERVER . ";dbname=" . DB_NAME, DB_USERNAME, DB_PASSWORD);
+    }
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-     echo 'Connection failed: ' . $e->getMessage();
-     exit();
+    echo 'Connection failed: ' . $e->getMessage();
+    exit();
 }
 
 //SQL FUNCTIONS
@@ -54,7 +66,8 @@ try {
  *
  * @return array Resultado de la consulta como array asociativo.
  */
-function db_select($db, $table, $columns = '*', $conditions = [], $orderBy = '', $limit = '') {
+function db_select($db, $table, $columns = '*', $conditions = [], $orderBy = '', $limit = '')
+{
     $sql = "SELECT $columns FROM `$table`";
     $params = [];
 
@@ -67,8 +80,12 @@ function db_select($db, $table, $columns = '*', $conditions = [], $orderBy = '',
         $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
     }
 
-    if ($orderBy) $sql .= " ORDER BY $orderBy";
-    if ($limit) $sql .= " LIMIT $limit";
+    if ($orderBy) {
+        $sql .= " ORDER BY $orderBy";
+    }
+    if ($limit) {
+        $sql .= " LIMIT $limit";
+    }
 
     $stmt = $db->prepare($sql);
     foreach ($params as $param => $value) {
@@ -89,7 +106,8 @@ function db_select($db, $table, $columns = '*', $conditions = [], $orderBy = '',
  * @return bool True si la inserción fue exitosa, False si falló.
  */
 
-function db_insert($db, $table, $data) {
+function db_insert($db, $table, $data)
+{
     $columns = implode(", ", array_keys($data));
     $placeholders = ":" . implode(", :", array_keys($data));
 
@@ -114,7 +132,8 @@ function db_insert($db, $table, $data) {
  *
  * @return bool True si la actualización fue exitosa, False si falló.
  */
-function db_update($db, $table, $data, $conditions) {
+function db_update($db, $table, $data, $conditions)
+{
     $setClause = [];
     foreach ($data as $column => $value) {
         $setClause[] = "`$column` = :set_$column";
@@ -149,7 +168,8 @@ function db_update($db, $table, $data, $conditions) {
  * @return bool True si el borrado fue exitoso, False si falló.
  */
 
-function db_delete($db, $table, $conditions) {
+function db_delete($db, $table, $conditions)
+{
     $whereClause = [];
     foreach ($conditions as $column => $value) {
         $whereClause[] = "`$column` = :$column";
@@ -194,13 +214,13 @@ elseif (isset($_GET['user_id']) && ctype_digit($_GET['user_id'])) {
     $stmt_check = $db->prepare("SELECT username FROM users WHERE id = :user_id");
     $stmt_check->bindValue(":user_id", $user_id, PDO::PARAM_INT);
     $stmt_check->execute();
-    $username_stmt= $stmt_check->fetch(PDO::FETCH_ASSOC);
+    $username_stmt = $stmt_check->fetch(PDO::FETCH_ASSOC);
     if (!$username_stmt) {
         header('Location: https://qrsume.com'); // ❌ Invalid user_id, redirect
         exit();
     }
     $username_url = $username_stmt['username'];
-    
+
 }
 
 // 3️⃣ **If neither username nor GET user_id is valid, check if admin is logged in**
@@ -216,7 +236,7 @@ if (!$user_id == 0) {
     $quick_access_tables = ['personalinfo', 'contactinfo', 'aptitudes', 'education', 'experience', 'interests', 'languages','custom_sections',
     'visibility_settings'];
     $results = [];
-    
+
     // Fetch data from multiple tables
     foreach ($quick_access_tables as $table) {
         $stmt = $db->prepare("SELECT * FROM `$table` WHERE `user_id` = :user_id");
@@ -224,7 +244,7 @@ if (!$user_id == 0) {
         $stmt->execute();
         $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+
     // Assign primary profile data
     $personalinfo = $results["personalinfo"][0] ?? null;
     $contactinfo = $results["contactinfo"][0] ?? null;
@@ -235,7 +255,3 @@ if (!$user_id == 0) {
 
 
 }
-
-
-
-?>

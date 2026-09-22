@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Records a view, download, or QR scan for a given user.
  * Updates both daily (page_stats) and lifetime (user_statistics) counters.
@@ -7,14 +8,21 @@
  * @param int    $userId ID of the user whose profile is being viewed/scanned/etc.
  * @param string $type   One of: 'views', 'downloads', 'qr_scans'
  */
-function recordStat(PDO $db, int $userId, string $type): void {
+function recordStat(PDO $db, int $userId, string $type): void
+{
     $allowed = ['views', 'downloads', 'qr_scans'];
     if (!in_array($type, $allowed, true)) {
         throw new InvalidArgumentException("Invalid stat type: $type");
     }
 
+    $isLocalDev = php_sapi_name() === 'cli-server';
+
     // Step 1: Update daily stats (page_stats)
-    $stmt = $db->prepare("
+    $stmt = $db->prepare($isLocalDev ? "
+        INSERT INTO page_stats (user_id, stat_date, {$type})
+        VALUES (:uid, DATE('now'), 1)
+        ON CONFLICT(user_id, stat_date) DO UPDATE SET {$type} = {$type} + 1
+    " : "
         INSERT INTO page_stats (user_id, stat_date, {$type})
         VALUES (:uid, CURDATE(), 1)
         ON DUPLICATE KEY UPDATE {$type} = {$type} + 1
@@ -24,7 +32,11 @@ function recordStat(PDO $db, int $userId, string $type): void {
     ]);
 
     // Step 2: Update lifetime stats (user_statistics)
-    $stmt = $db->prepare("
+    $stmt = $db->prepare($isLocalDev ? "
+        INSERT INTO user_statistics (user_id, {$type})
+        VALUES (:uid, 1)
+        ON CONFLICT(user_id) DO UPDATE SET {$type} = {$type} + 1
+    " : "
         INSERT INTO user_statistics (user_id, {$type})
         VALUES (:uid, 1)
         ON DUPLICATE KEY UPDATE {$type} = {$type} + 1
@@ -35,20 +47,23 @@ function recordStat(PDO $db, int $userId, string $type): void {
 /**
  * Record a page view.
  */
-function recordPageView(PDO $db, int $userId): void {
+function recordPageView(PDO $db, int $userId): void
+{
     recordStat($db, $userId, 'views');
 }
 
 /**
  * Record a download.
  */
-function recordDownload(PDO $db, int $userId): void {
+function recordDownload(PDO $db, int $userId): void
+{
     recordStat($db, $userId, 'downloads');
 }
 
 /**
  * Record a QR scan.
  */
-function recordQRScan(PDO $db, int $userId): void {
+function recordQRScan(PDO $db, int $userId): void
+{
     recordStat($db, $userId, 'qr_scans');
 }

@@ -1,5 +1,18 @@
 RewriteEngine On
 
+# Redirect requests that still spell out ".php" to the clean (extension-less) URL,
+# e.g. /assets/login.php -> /assets/login. Checked against the raw request line
+# so it only fires on the visible URL, not on internal rewrites below.
+RewriteCond %{THE_REQUEST} \s/+(.+?)\.php[\s?] [NC]
+RewriteRule ^ /%1 [R=301,L]
+
+# Serve the matching .php file when the clean URL is requested, without exposing
+# ".php" in the address bar, e.g. /assets/login -> /assets/login.php.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*)$ $1.php [L,QSA]
+
 # Allow direct access to existing files and directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

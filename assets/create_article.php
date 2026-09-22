@@ -3,7 +3,8 @@ $headTitle = "Create Article";
 include "head.php";
 
 //Function to create slug
-function slugify($text) {
+function slugify($text)
+{
     // Convert to lowercase
     $text = strtolower($text);
 
@@ -28,14 +29,16 @@ function slugify($text) {
 }
 
 //Function to check if slug exist
-function isSlugExists($slug, $pdo) {
+function isSlugExists($slug, $pdo)
+{
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM blogarticles WHERE slug = ?");
     $stmt->execute([$slug]);
     return $stmt->fetchColumn() > 0;
 }
 
 //Function to iterate till a unique slug is fount
-function generateUniqueSlug($title, $pdo) {
+function generateUniqueSlug($title, $pdo)
+{
     $slug = slugify($title);
     $baseSlug = $slug;
     $counter = 1;
@@ -53,32 +56,33 @@ function generateUniqueSlug($title, $pdo) {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Get form inputs
     // Function to sanitize input fields (removes harmful characters)
-    function cleanInput2($input) {
+    function cleanInput2($input)
+    {
         return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
     }
-    
+
     // Validate and sanitize input data
     $article_title = !empty($_POST['article_title']) ? $_POST['article_title'] : null;
     $article_date = !empty($_POST['article_date']) && preg_match("/^\d{4}-\d{2}-\d{2}$/", $_POST['article_date']) ? $_POST['article_date'] : null;
     $article_content = !empty($_POST['article_content']) ? $_POST['article_content'] : null;
     $article_tags = !empty($_POST['article_tags']) ? $_POST['article_tags'] : null;
     $article_summary = !empty($_POST['article_summary']) ? $_POST['article_summary'] : null;
-    
+
     // Validate article status (must be 'draft' or 'published')
     $valid_statuses = ['draft', 'published'];
     $article_status = (!empty($_POST['article_status']) && in_array($_POST['article_status'], $valid_statuses)) ? $_POST['article_status'] : 'draft';
-    
+
     // Validate image filename (optional)
     $article_photo = (!empty($_POST['article_photo'])) ? $_POST['article_photo'] : 'default.webp';
-    
+
     // If any required field is missing, return an error
     if (!$article_title || !$article_date || !$article_content || !$article_status) {
         die("Error: Missing required fields.");
     }
-    
+
     // Now your data is sanitized and safe to use in database operations!
 
-    
+
     // Check if article_id is passed (edit mode)
     if (isset($_POST['article_id']) && !empty($_POST['article_id'])) {
         // Update existing article
@@ -114,14 +118,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // Execute the query
-if ($stmt->execute()) {
-    if (isset($article_id)) {
-        $message = "Article updated successfully";
-    } else {
-        $message = "New article created successfully";
-    }
-    $username = $_SESSION['username'];
-    ?>
+    if ($stmt->execute()) {
+        if (isset($article_id)) {
+            $message = "Article updated successfully";
+        } else {
+            $message = "New article created successfully";
+        }
+        $username = $_SESSION['username'];
+        ?>
     <div class="container mt-4">
         <div class="alert alert-success text-center" role="alert">
             <h4 class="alert-heading"><?= $message ?></h4>
@@ -132,15 +136,15 @@ if ($stmt->execute()) {
         </div>
     </div>
     <?php
-} else {
-    ?>
+    } else {
+        ?>
     <div class="container mt-4">
         <div class="alert alert-danger text-center" role="alert">
             <h4 class="alert-heading">Error processing the article.</h4>
         </div>
     </div>
     <?php
-}
+    }
 
 }
 ?>

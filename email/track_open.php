@@ -1,8 +1,11 @@
 <?php
+
 // Show errors for debugging (remove in production)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+if (php_sapi_name() === 'cli-server') {
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+}
 
 // Include your DB connection, make sure $db is a valid PDO instance
 include("../assets/db.php");
@@ -27,8 +30,8 @@ try {
     $stmt = $db->prepare("SELECT COUNT(*) FROM email_tracking WHERE email_id = ?");
     $stmt->execute([$email_id]);
     $exists = $stmt->fetchColumn() > 0;
-    
-    if(!$exists){
+
+    if (!$exists) {
         // Insert tracking record only if it does NOT exist yet (first open)
         $insert = $db->prepare("INSERT INTO email_tracking 
             (email_id, recipient_email, ip_address, user_agent, is_first_open) 
@@ -40,7 +43,7 @@ try {
             ':ip_address' => $ip_address,
             ':user_agent' => $user_agent
         ]);
-}
+    }
 } catch (Exception $e) {
     // Optional: log error or ignore to not break pixel loading
     // error_log($e->getMessage());

@@ -3,7 +3,7 @@ $headTitle = "Settings";
 include('head.php');
 
 if (!isset($_SESSION['id'])) {
-     header("Location: https://qrsume.com/error.php");
+    header("Location: https://qrsume.com/error.php");
     exit();
 }
 
@@ -54,35 +54,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt->bindParam(":email", $newEmail);
         $stmt->execute();
         $existingUser = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
         // If the email is the same as the current one, do nothing
         if ($newEmail === $user['email']) {
             $error = "This is already your current email.";
-        } 
+        }
         // If the email exists for another user, show an error
         elseif ($existingUser) {
             $error = "This email is already in use. Please choose a different one.";
-        } 
+        }
         // If it's a new email, proceed with verification
         else {
             $_SESSION['new_email'] = $newEmail;
             $_SESSION['verification_code'] = rand(100000, 999999);
-    
+
             $subject = "Email Verification Code";
             $message = "Your verification code is: " . $_SESSION['verification_code'];
             $headers = "From: no-reply@qrsume.com\r\n";
-    
+
             if (mail($_SESSION['new_email'], $subject, $message, $headers)) {
                 $_SESSION['email_verification_pending'] = true;
             } else {
                 $error = "Failed to send verification email.";
             }
         }
-        
-        
-        
-        
-        
+
+
+
+
+
     } elseif (isset($_POST['verify_email'])) {
         if ($_POST['verification_code'] == $_SESSION['verification_code']) {
             $stmt = $db->prepare("UPDATE users SET email = :email WHERE id = :id");
@@ -130,7 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <!-- Bootstrap UI -->
 <body>
-<?php include("nav.php"); ?>
+<?php include("nav_profile.php"); ?>
 <div class="container mt-7">
     <?php if (isset($success)): ?>
         <div class="alert alert-success text-center"><?= htmlspecialchars($success) ?></div>

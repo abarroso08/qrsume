@@ -1,21 +1,21 @@
 <div class="row g-4 p-md-5 p-3" id="blog">
 
-<?php 
+<?php
 $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : $user_id;
 
 // TEMPORARY: FIX DATABASE QUERIES!
-$stmt_blog = $db->query("SELECT * FROM `blogarticles` WHERE `user_id` = $user_id AND `article_status` = 'published' ORDER BY `article_date` DESC"); 
+$stmt_blog = $db->query("SELECT * FROM `blogarticles` WHERE `user_id` = $user_id AND `article_status` = 'published' ORDER BY `article_date` DESC");
 $results_blog["blogarticles"] = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($results_blog["blogarticles"] as $article) :
     if ($article["article_status"] == "published"):
-        $tags="";
-        $dataTags="";
-        if(!empty($article["article_tags"])){
+        $tags = "";
+        $dataTags = "";
+        if (!empty($article["article_tags"])) {
             $tags = explode(',', $article['article_tags']);
             $dataTags = implode(' ', array_map('strtolower', array_map('trim', $tags)));
         }
-?>
+        ?>
 
    <div class="col-sm-6 blog-card d-flex" data-tags="<?= htmlspecialchars($dataTags) ?>">
     <div class="card text-white border-0 w-100 h-100" style="background-color: var(--primary);">
@@ -61,9 +61,9 @@ foreach ($results_blog["blogarticles"] as $article) :
 
 
 
-<?php 
+<?php
     endif;
-endforeach; 
+endforeach;
 ?>
 
 </div>

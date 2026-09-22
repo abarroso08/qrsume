@@ -1,4 +1,4 @@
-<?php require "db.php"; 
+<?php require "db.php";
 $primary = "#2c3e50";
 $secondary = "#737373";
 
@@ -11,7 +11,7 @@ $secondary = "#737373";
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- SEO Meta Tags -->
-    <title><?= htmlspecialchars(($headTitle ?? $personalinfo['personal_name'] ?? '') ).' ' ?> QRsume</title>
+    <title><?= htmlspecialchars(($headTitle ?? $personalinfo['personal_name'] ?? '')).' ' ?> QRsume</title>
     <meta name="description" content="Generate professional, customizable QR resumes quickly and effortlessly with QRsume. Create yours today!">
     <meta name="keywords" content="QR Resume, professional resume, customizable resumes, online resume generator, QRsume, resume, job, internship, trabajo, curriculum, CV, prácticas">
 

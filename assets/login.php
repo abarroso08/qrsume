@@ -13,7 +13,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $user_input = htmlspecialchars(trim($_POST['user_input'])); // Can be username or email
         $password = trim($_POST['password']);
-        
+
         if (empty($user_input) || empty($password)) {
             $error = "Both fields are required.";
         } else {
@@ -26,7 +26,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
 
             $stmt_login->bindValue(":user_input", $user_input, PDO::PARAM_STR);
             $stmt_login->execute();
-            
+
             $user = $stmt_login->fetch(PDO::FETCH_ASSOC);
 
             if (!$user) {
@@ -46,7 +46,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     $_SESSION['privilege'] = $privilege;
                     $_SESSION['id'] = $user['id'];
                     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-                    
+
                     $to = "alejandrobarrosobueso@gmail.com";
                     $subject = "User Login";
                     $link = "https://qrsume.com/" . urlencode($user['username']);
@@ -66,13 +66,13 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         }
     }
 
-if(isset($_GET["username"])){
-    $success = "Great, your account has been created, now log in to start creating your resume";
-    
-}
-?>
+    if (isset($_GET["username"])) {
+        $success = "Great, your account has been created, now log in to start creating your resume";
+
+    }
+    ?>
 <body class="d-flex flex-column align-items-center justify-content-between" style="min-height:100vh;">
-    <?php include("nav2.php"); ?>
+    <?php include("nav_site.php"); ?>
         <div class="container-fluid">
         <div class="row justify-content-center">
         <div class="col-md-5 col-12">

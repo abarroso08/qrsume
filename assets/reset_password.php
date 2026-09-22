@@ -57,7 +57,7 @@ if (isset($_POST['reset_password'])) {
 
 <!-- Bootstrap UI -->
 <body>
-<?php include("nav.php"); ?>
+<?php include("nav_profile.php"); ?>
 <div class="container mt-4">
     <?php if ($success): ?>
         <div class="alert alert-success text-center"><?= htmlspecialchars($success) ?></div>

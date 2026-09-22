@@ -1,5 +1,18 @@
 {
+    "name": "qrsume/qrsume",
+    "description": "QRsume - dynamic QR-code resume/CV builder",
+    "type": "project",
+    "license": "proprietary",
     "require": {
-        "tecnickcom/tcpdf": "^6.7"
+        "php": ">=8.0",
+        "tecnickcom/tcpdf": "^6.7",
+        "stripe/stripe-php": "^20.1"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95"
+    },
+    "scripts": {
+        "lint": "php-cs-fixer fix --dry-run --diff",
+        "format": "php-cs-fixer fix"
     }
 }

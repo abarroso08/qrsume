@@ -1,6 +1,9 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 // Database connection
 include("assets/db.php");
 include("assets/stats.php");
@@ -92,7 +95,7 @@ require 'vendor/autoload.php';
 
 
 
-$username=$user['username'];
+$username = $user['username'];
 // Create PDF
 $pdf = new TCPDF('P', 'pt', 'Letter', true, 'UTF-8', false);
 
@@ -104,7 +107,7 @@ $pdf->SetTitle("Resume - " . $personal['personal_name']);
 // Disable header/footer
 $pdf->setPrintHeader(false);
 $pdf->setPrintFooter(false);
-$pdf->SetAutoPageBreak(TRUE, 15);
+$pdf->SetAutoPageBreak(true, 15);
 $pageWidth  = $pdf->getPageWidth();
 $pageHeight = $pdf->getPageHeight();
 $marginL = 40;
@@ -164,26 +167,26 @@ $pdf->Ln(10);
 //$pdf->Ln(10);
 
 // ========== EDUCATION ==========
-if (!empty($education) && $display_education){
+if (!empty($education) && $display_education) {
     $pdf->SetFont($fontName, 'B', $sectionFontSize);
     $pdf->Cell(0, 20, 'EDUCATION', 0, 1, 'L');
     $pdf->Line($marginL, $pdf->GetY(), $pageWidth - $marginR, $pdf->GetY());
     $pdf->Ln(3);
     foreach ($education as $edu) {
         $pdf->SetFont($fontName, 'B', $titleFontSize);
-        $pdf->MultiCell($pageWidth * 3 / 4, 15, "{$edu['name_of_studies']}", 0, 'L', 0, 0, '','', true);
+        $pdf->MultiCell($pageWidth * 3 / 4, 15, "{$edu['name_of_studies']}", 0, 'L', 0, 0, '', '', true);
         $pdf->Cell(0, 15, "{$edu['date']}", 0, 1, 'R');
-    
+
         $pdf->SetFont($fontName, '', $contentFontSize);
         //$pdf->MultiCell(0, 15, "{$edu['place_of_study']}\n{$edu['brief_description']}", 0, 'L');
         // Get current position
         $y = $pdf->GetY();
         // Estimate how many lines the text will occupy
-        $lines = $pdf->getNumLines("{$edu['name_of_studies']}", ($pageWidth*3/4) -30);
+        $lines = $pdf->getNumLines("{$edu['name_of_studies']}", ($pageWidth * 3 / 4) - 30);
         // If it wraps (more than 1 line), move Y up by 1 line
         if ($lines > 1) {
             $y += 15;
-            $pdf->setXY($pdf->GetX(),$y);
+            $pdf->setXY($pdf->GetX(), $y);
         }
         $pdf->MultiCell(0, 15, "{$edu['place_of_study']}", 0, 'L');
         $pdf->Ln(3);
@@ -201,7 +204,7 @@ if (!empty($experience) && $display_experience) {
         $pdf->SetFont($fontName, 'B', $titleFontSize);
         $pdf->Cell(0, 15, "{$exp['job_name']}, {$exp['place_of_work']}", 0, 0, 'L');
         $pdf->Cell(0, 15, "{$exp['date']}", 0, 1, 'R');
-    
+
         $pdf->SetFont($fontName, '', $contentFontSize);
         $pdf->SetX($pdf->GetX() + 10);
         $pdf->MultiCell(0, 15, "{$exp['brief_description']}", 0, 'L');
@@ -211,7 +214,7 @@ if (!empty($experience) && $display_experience) {
 }
 
 // ========== SKILLS ==========
-if(!empty($skills) && $display_skills){
+if (!empty($skills) && $display_skills) {
     $pdf->SetFont($fontName, 'B', $sectionFontSize);
     $pdf->Cell(0, 20, 'SKILLS', 0, 1, 'L');
     $pdf->Line($marginL, $pdf->GetY(), $pageWidth - $marginR, $pdf->GetY());
@@ -219,18 +222,18 @@ if(!empty($skills) && $display_skills){
     $counter = 1;
     $pdf->Ln(3);
     foreach ($skills as $skill) {
-        if ($counter == 1){
-            $pdf->Cell($pageWidth/2, 15, "• " . $skill['aptitude'], 0, 0, 'L');
+        if ($counter == 1) {
+            $pdf->Cell($pageWidth / 2, 15, "• " . $skill['aptitude'], 0, 0, 'L');
             $counter++;
-        }else{
-            $pdf->Cell($pageWidth/2, 15, "• " . $skill['aptitude'], 0, 1, 'L');
+        } else {
+            $pdf->Cell($pageWidth / 2, 15, "• " . $skill['aptitude'], 0, 1, 'L');
             $counter = 1;
         }
     }
 }
 
 // ========== LANGUAGES ==========
-if (!empty($languages) && $display_languages){
+if (!empty($languages) && $display_languages) {
     $pdf->SetFont($fontName, 'B', $sectionFontSize);
     $pdf->Cell(0, 20, 'LANGUAGES', 0, 1, 'L');
     $pdf->Ln(2);
@@ -238,12 +241,12 @@ if (!empty($languages) && $display_languages){
     $pdf->SetFont($fontName, '', $contentFontSize);
     $pdf->Ln(3);
     foreach ($languages as $lang) {
-        $pdf->Cell(0, 15,$languages_dots."{$lang['language']}"."  "." ({$lang['level']})", 0, 1, 'L');
+        $pdf->Cell(0, 15, $languages_dots."{$lang['language']}"."  "." ({$lang['level']})", 0, 1, 'L');
         $pdf->Ln(5);
     }
 }
 // ========== INTERESTS ==========
-if (!empty($interests) && $display_projects){
+if (!empty($interests) && $display_projects) {
     $pdf->SetFont($fontName, 'B', $sectionFontSize);
     $pdf->Cell(0, 20, 'PROJECTS', 0, 1, 'L');
     $pdf->Ln(2);
@@ -251,11 +254,11 @@ if (!empty($interests) && $display_projects){
     $pdf->Ln(3);
     foreach ($interests as $int) {
         $pdf->SetFont($fontName, 'B', $titleFontSize);
-        
+
         // Print the bullet point as a bold line using MultiCell
         $pdf->MultiCell(0, 15, "• " . "{$int['interest']}", 0, 'L');
-        
-       // Reset font and print the description
+
+        // Reset font and print the description
         $pdf->SetFont($fontName, '', $contentFontSize);
         $pdf->SetX($pdf->GetX() + 10);
         $pdf->MultiCell(0, 10, "{$int['description']}", 0, 'L');
@@ -289,7 +292,7 @@ $style = array(
     'vpadding' => 'auto',
     'hpadding' => 'auto',
     'fgcolor' => array(0,0,0),
-    'bgcolor' => false, 
+    'bgcolor' => false,
     'module_width' => 2, // QR code module width
     'module_height' => 2  // QR code module height
 );
@@ -306,11 +309,11 @@ $qrLink = "https://www.qrsume.com/" . $username . "?qr_scan=true";
 $qrSize = 80;  // QR Code size
 
 // Position QR code in the **ottom-right corner**
-$x = $pageWidth - $qrSize - $marginR/2; // 50px padding from right
-$y = $pageHeight - $qrSize-10; // 80px padding from bottom (extra space for text)
+$x = $pageWidth - $qrSize - $marginR / 2; // 50px padding from right
+$y = $pageHeight - $qrSize - 10; // 80px padding from bottom (extra space for text)
 
 // Print QR Code
-if($display_QR){
+if ($display_QR) {
     $pdf->SetMargins(0, 0, 0);
     $pdf->write2DBarcode($qrLink, 'QRCODE,H', $x, $y, $qrSize, $qrSize, $style, '');
     $pdf->SetMargins($marginL, $marginT, $marginR);
@@ -319,7 +322,7 @@ if($display_QR){
 $pdf->SetFont('helvetica', '', 8);
 $qrtext = 'Full Profile & Projects';
 $qrtextWidth = $pdf->GetStringWidth($qrtext);
-$textX = $x + $qrSize/2 - $qrtextWidth/2 - 5; // Align with the left side of the QR code
+$textX = $x + $qrSize / 2 - $qrtextWidth / 2 - 5; // Align with the left side of the QR code
 $textY = $y + $qrSize - 5 ; // 5px below the QR code
 
 // Move cursor to the calculated position
@@ -327,7 +330,7 @@ $textY = $y + $qrSize - 5 ; // 5px below the QR code
 $pdf->SetXY($textX, $textY);
 
 // Write the clickable link below the QR code
-if($display_QR){
+if ($display_QR) {
     $pdf->Cell(0, 1, $qrtext, 0, 1, 'L');
 }
 
@@ -337,9 +340,9 @@ $pdf->SetFont('helvetica', '', 8);
 $pdf->SetTextColor(0, 0, 255); // Blue color
 $pdf->SetFont('', 'U'); // Underline font
 // Position the text
-$pdf->SetXY($x, $textY-10);
+$pdf->SetXY($x, $textY - 10);
 // Create the clickable link
-if($display_bottom_link){
+if ($display_bottom_link) {
     $pdf->Write(0, $text, $qrLink, false, 'C', true);
 }
 
@@ -359,4 +362,3 @@ $pdf->writeHTML($html, true, false, true, false, '');
 
 // ========== OUTPUT PDF ==============
 $pdf->Output("resume_".$personalinfo["personal_name"].'.pdf', 'I');
-?>

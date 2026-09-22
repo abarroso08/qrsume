@@ -2,7 +2,9 @@
 require "../assets/head.php"; // assumes PDO connection in $db
 $headTitle = "All Resumes";
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     header('Location: login.php');
     exit;
@@ -10,7 +12,9 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 
 $userId = $_SESSION['id'] ?? null;
 $username = $_SESSION['username'] ?? 'User';
-if (!$userId) die('Error: User ID not set in session.');
+if (!$userId) {
+    die('Error: User ID not set in session.');
+}
 
 try {
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -33,7 +37,9 @@ try {
 </style>
 
 <body class="bg-light d-flex flex-column" style="min-height:100vh;">
-<?php if (file_exists('../assets/nav_dashboard.php')) include '../assets/nav_dashboard.php'; ?>
+<?php if (file_exists('../assets/nav_dashboard.php')) {
+    include '../assets/nav_dashboard.php';
+} ?>
 
 <div class="container my-2">
     <h2 class="fw-bold text-center mb-4">Your Resumes</h2>
@@ -82,6 +88,8 @@ try {
     <?php endif; ?>
 </div>
 
-<?php if (file_exists('../assets/footer.php')) include '../assets/footer.php'; ?>
+<?php if (file_exists('../assets/footer.php')) {
+    include '../assets/footer.php';
+} ?>
 </body>
 </html>

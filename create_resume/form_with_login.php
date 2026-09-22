@@ -1,12 +1,14 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 
 include("../assets/head.php");
 
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-  header("Location: ../assets/login.php");
-  exit();
+    header("Location: ../assets/login.php");
+    exit();
 }
 $sectionNumber = isset($_GET['section']) ? (int) $_GET['section'] : 0;
 $prevSection = max(0, $sectionNumber - 1);
@@ -17,7 +19,7 @@ $isFirstSection = ($sectionNumber == 0);
 $highlightStyle = 'background-color: rgba(241, 85, 85, 0.15); border: 2px solid #F15555; border-radius: 8px;';
 // Generate CSRF token
 if (!isset($_SESSION['csrf_token'])) {
-  $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 $quick_access_tables = ['personalinfo', 'contactinfo', 'aptitudes', 'education', 'experience', 'interests', 'languages', 'custom_sections'];
@@ -25,10 +27,10 @@ $quick_access_tables = ['personalinfo', 'contactinfo', 'aptitudes', 'education',
 // Fetch User Data
 $results = [];
 foreach ($quick_access_tables as $table) {
-  $query = "SELECT * FROM `$table` WHERE `user_id` = ?";
-  $stmt = $db->prepare($query);
-  $stmt->execute([$_SESSION['id']]);
-  $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $query = "SELECT * FROM `$table` WHERE `user_id` = ?";
+    $stmt = $db->prepare($query);
+    $stmt->execute([$_SESSION['id']]);
+    $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 $personalinfo = $results['personalinfo'][0] ?? null;
@@ -204,19 +206,20 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
               <i class="bi bi-briefcase me-2"></i> Experience
             </a>
           </li>
+          
           <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=4" data-section="4">
-              <i class="bi bi-star me-2"></i> Projects
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=5" data-section="5">
+            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=4" data-section="5">
               <i class="bi bi-lightbulb me-2"></i> Aptitudes
             </a>
           </li>
           <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=6" data-section="6">
+            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=5" data-section="6">
               <i class="bi bi-translate me-2"></i> Languages
+            </a>
+          </li>
+          <li class="hover-highlight nav-item">
+            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=6" data-section="4">
+              <i class="bi bi-star me-2"></i> Projects
             </a>
           </li>
           <li class="hover-highlight nav-item">
@@ -621,7 +624,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
 
           <!-- Projects -->
-<div class="form-section <?= $sectionNumber === 4 ? '' : 'd-none' ?>" id="section-4">
+<div class="form-section <?= $sectionNumber === 6 ? '' : 'd-none' ?>" id="section-4">
   <h2 class="mb-4">Projects</h2>
 
   <form id="form-4" action="https://qrsume.com/create_resume/upload/save_projects.php" method="POST">
@@ -664,7 +667,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <?php if (count($results['interests']) < 5): ?>
+    <?php if (count($results['interests']) < 10): ?>
       <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-project-btn">
         + Add New Project
       </button>
@@ -708,7 +711,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
 
           <!-- Aptitudes -->
-<div class="form-section <?= $sectionNumber === 5 ? '' : 'd-none' ?>" id="section-5">
+<div class="form-section <?= $sectionNumber === 4 ? '' : 'd-none' ?>" id="section-5">
   <h2 class="mb-4">Aptitudes</h2>
 
   <form id="form-5" action="https://qrsume.com/create_resume/upload/save_aptitudes.php" method="POST">
@@ -744,7 +747,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <?php if (count($results['aptitudes']) < 5): ?>
+    <?php if (count($results['aptitudes']) < 10): ?>
       <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-aptitude-btn">
         + Add New Aptitude
       </button>
@@ -781,7 +784,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
 
          <!-- Languages -->
-<div class="form-section <?= $sectionNumber === 6 ? '' : 'd-none' ?>" id="section-6">
+<div class="form-section <?= $sectionNumber === 5 ? '' : 'd-none' ?>" id="section-6">
   <h2 class="mb-4">Languages</h2>
 
   <form id="form-6" action="https://qrsume.com/create_resume/upload/save_languages.php" method="POST">
@@ -1032,7 +1035,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
         <!-- Aptitudes (highlighted for section 5) -->
         <?php if (!empty($results['aptitudes'])): ?>
-          <div style="<?= $sectionNumber === 5 ? $highlightStyle : '' ?>">
+          <div style="<?= $sectionNumber === 4 ? $highlightStyle : '' ?>">
             <div class="section-title" style="font-size: var(--font-section, 16px); font-weight: bold; margin-top: 0.4rem; margin-bottom: 0.3rem; border-bottom: 1px solid black;">
               Aptitudes
             </div>
@@ -1046,7 +1049,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
         <!-- Languages (highlighted for section 6) -->
         <?php if (!empty($results['languages'])): ?>
-          <div style="<?= $sectionNumber === 6 ? $highlightStyle : '' ?>">
+          <div style="<?= $sectionNumber === 5 ? $highlightStyle : '' ?>">
             <div class="section-title" style="font-size: var(--font-section, 16px); font-weight: bold; margin-top: 0.4rem; margin-bottom: 0.3rem; border-bottom: 1px solid black;">
               Languages
             </div>
@@ -1061,7 +1064,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
         <!-- Projects (highlighted for section 4) -->
         <?php if (!empty($results['interests'])): ?>
-          <div style="<?= $sectionNumber === 4 ? $highlightStyle : '' ?>">
+          <div style="<?= $sectionNumber === 6 ? $highlightStyle : '' ?>">
             <div class="section-title" style="font-size: var(--font-section, 16px); font-weight: bold; margin-top: 0.4rem; margin-bottom: 0.3rem; border-bottom: 1px solid black;">
               Projects
             </div>

@@ -1,6 +1,8 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 include '../assets/db.php'; // Include database connection
 
 // 🔒 Restrict Access to Admins Only
@@ -69,7 +71,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <tbody>
             <?php foreach ($users as $user): ?>
                 <tr>
-                    <?php if($_SESSION["username"] == "barroso" || $_SESSION["admin_impersonating"] == true){?>
+                    <?php if ($_SESSION["username"] == "barroso" || $_SESSION["admin_impersonating"] == true) {?>
                     <td>
     <a href="https://qrsume.com/<?= htmlspecialchars($user['username']) ?>" target="_blank" class="btn btn-outline-primary btn-sm mb-1">View Site</a>
 

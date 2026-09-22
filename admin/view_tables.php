@@ -26,14 +26,16 @@ $stmt->execute();
 $usernames = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
 // Get user_id from username
-function getUserId($db, $username) {
+function getUserId($db, $username)
+{
     $stmt = $db->prepare("SELECT id FROM users WHERE username = :username");
     $stmt->execute([':username' => $username]);
     return $stmt->fetchColumn();
 }
 
 // Get rows from table
-function getTableData($db, $table, $join = false, $user = null) {
+function getTableData($db, $table, $join = false, $user = null)
+{
     if ($join) {
         $sql = "SELECT $table.*, users.username FROM `$table` LEFT JOIN users ON $table.user_id = users.id";
         if ($user) {
@@ -96,7 +98,7 @@ function getTableData($db, $table, $join = false, $user = null) {
                         <select name="user" class="form-select" onchange="this.form.submit()">
                             <option value="">-- Select User --</option>
                             <?php foreach ($usernames as $username): ?>
-                                <option value="<?php echo $username; ?>" <?php echo ($username === $selected_user ? 'selected' : ''); ?>>
+                                <option value="<?php echo $username; ?>" <?php echo($username === $selected_user ? 'selected' : ''); ?>>
                                     <?php echo $username; ?>
                                 </option>
                             <?php endforeach; ?>
@@ -132,10 +134,10 @@ function getTableData($db, $table, $join = false, $user = null) {
                                 echo "<p class='text-muted'>No data found in <code>$table</code>.</p>";
                             endif;
                         endforeach;
-                    else:
-                        echo "<div class='alert alert-danger'>User not found.</div>";
-                    endif;
-                    ?>
+                else:
+                    echo "<div class='alert alert-danger'>User not found.</div>";
+                endif;
+?>
                 <?php else: ?>
                     <p class="text-muted">Select a user to view the super table.</p>
                 <?php endif; ?>
@@ -152,7 +154,7 @@ function getTableData($db, $table, $join = false, $user = null) {
                             <select name="user" class="form-select" onchange="this.form.submit()">
                                 <option value="">-- All Users --</option>
                                 <?php foreach ($usernames as $username): ?>
-                                    <option value="<?php echo $username; ?>" <?php echo ($username === $selected_user ? 'selected' : ''); ?>>
+                                    <option value="<?php echo $username; ?>" <?php echo($username === $selected_user ? 'selected' : ''); ?>>
                                         <?php echo $username; ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -172,24 +174,24 @@ function getTableData($db, $table, $join = false, $user = null) {
                         <thead class="table-dark">
                             <tr>
                                 <?php
-                                $join = in_array($selected_table, $joinable_tables);
-                                $rows = getTableData($db, $selected_table, $join, $selected_user);
-                                if (!empty($rows)) {
-                                    foreach (array_keys($rows[0]) as $column) {
-                                        echo "<th>" . htmlspecialchars($column) . "</th>";
-                                    }
-                                    echo "</tr></thead><tbody>";
-                                    foreach ($rows as $row) {
-                                        echo "<tr>";
-                                        foreach ($row as $cell) {
-                                            echo "<td>" . htmlspecialchars($cell) . "</td>";
-                                        }
-                                        echo "</tr>";
-                                    }
-                                } else {
-                                    echo "<th>No data found.</th></tr></thead>";
-                                }
-                                ?>
+            $join = in_array($selected_table, $joinable_tables);
+$rows = getTableData($db, $selected_table, $join, $selected_user);
+if (!empty($rows)) {
+    foreach (array_keys($rows[0]) as $column) {
+        echo "<th>" . htmlspecialchars($column) . "</th>";
+    }
+    echo "</tr></thead><tbody>";
+    foreach ($rows as $row) {
+        echo "<tr>";
+        foreach ($row as $cell) {
+            echo "<td>" . htmlspecialchars($cell) . "</td>";
+        }
+        echo "</tr>";
+    }
+} else {
+    echo "<th>No data found.</th></tr></thead>";
+}
+?>
                         </tbody>
                     </table>
                 </div>

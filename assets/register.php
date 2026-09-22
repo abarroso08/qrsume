@@ -162,13 +162,13 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     $stmt->bindParam(":username", $_SESSION['username']);
                     $stmt->execute();
                     $userRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
+
                     if ($userRow) {
                         $_SESSION['admin_logged_in'] = true;
                         $_SESSION['username'] = $_SESSION['username'];
                         $_SESSION['privilege'] = $userRow['privilege'];
                         $_SESSION['id'] = $userRow['id'];
-                    
+
                         header("Location: https://qrsume.com/create_resume/form_with_login.php");
                         exit();
                     } else {
@@ -176,7 +176,7 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
                     }
 
 
-                    
+
                 } else {
                     $error = "Something went wrong. Please try again.";
                 }
@@ -195,7 +195,7 @@ $email = $_POST['email'] ?? "";
 ?>
 
 <body class="d-flex flex-column align-items-center justify-content-between" style="min-height:100vh;">
-<?php include("nav2.php");?>
+<?php include("nav_site.php");?>
  <div class="container-fluid">
         <div class="row justify-content-center">
         <div class="col-md-5 col-12">

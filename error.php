@@ -12,7 +12,7 @@
 </head>
 
 <body>
-     <?php include "assets/nav2.php"; ?>
+     <?php include "assets/nav_site.php"; ?>
      <div class="container-xxl overflow-hidden ">
           <!-- Error 404 Template 1 - Bootstrap Brain Component -->
           <section class="py-3 py-md-5 min-vh-100 d-flex justify-content-center align-items-center">

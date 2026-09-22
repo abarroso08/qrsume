@@ -302,15 +302,10 @@ if (file_exists('nav_dashboard.php')) {
                              alt="Resume preview for <?= htmlspecialchars($username) ?>"
                              style="width:75%">
                     </div>
-                    <div class="d-flex justify-content-center gap-3 p-3 bg-light bottom-round">
-                        <a href="/preview.php"
-                           class="text-secondary text-decoration-none d-flex align-items-center gap-1">
-                            <i class="bi bi-download"></i> Download
-                        </a>
-                        <div class="vr"></div>
-                        <a href="/<?= htmlspecialchars($username) ?>"
-                           class="text-secondary text-decoration-none d-flex align-items-center gap-1">
-                            <i class="bi bi-globe"></i> Online
+                    <div class="mt-auto d-flex flex-column align-items-center gap-2 p-3 bg-light bottom-round">
+                        <a href="/preview.php" class="btn fw-bold text-white w-100 d-flex align-items-center justify-content-center gap-2" style="background: linear-gradient(135deg, #4f46e5, #6366f1); border-radius: 12px;">
+                            <i class="bi bi-file-earmark-pdf-fill"></i>
+                                Preview &amp; Download PDF
                         </a>
                     </div>
                 </div>
@@ -332,9 +327,9 @@ if (file_exists('nav_dashboard.php')) {
             <div class="mt-auto d-flex flex-column align-items-center gap-2 p-3 bg-light bottom-round">
                 
                 <!-- New Article Button -->
-                <a href="/assets/form.php" 
-                   class="btn fw-bold text-white w-100 d-flex align-items-center justify-content-center gap-2"
-                   style="background-color: #6366f1; border-radius: 12px;">
+                <a href="https://qrsume.com/assets/article_form.php"
+                   class="text-decoration-none d-flex align-items-center gap-1 fw-bold"
+                   style="color: #4f46e5;">
                     <i class="bi bi-pencil-square"></i>
                     New Article
                 </a>

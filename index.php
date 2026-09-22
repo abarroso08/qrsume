@@ -8,13 +8,13 @@ include "assets/head.php";
 $stmt_views = $db->prepare("UPDATE personalinfo SET visits = visits + 1 WHERE user_id = ?");
 $stmt_views ->execute([$user_id]);
 
-if(!isset($_GET['username'])){
+if (!isset($_GET['username'])) {
     ?>
     <!-- index.php -->
 <?php
 // Include the database connection if needed for this page
 //include 'includes/db.php';
-?>
+    ?>
 <head>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
@@ -29,8 +29,8 @@ if(!isset($_GET['username'])){
 </head>
 <body>
 <?php
-include("assets/nav2.php");
-?>
+    include("assets/nav_site.php");
+    ?>
 
 <section class="container py-3 bg-body" >
   <div class="row align-items-center">
@@ -300,32 +300,32 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 
     <?php
-}else{
-include('assets/stats.php');
+} else {
+    include('assets/stats.php');
 
-$username = $_GET['username'] ?? '';
-$sessionUsername = $_SESSION['username'] ?? '';
+    $username = $_GET['username'] ?? '';
+    $sessionUsername = $_SESSION['username'] ?? '';
 
-// Only proceed if we're visiting someone else's profile
-if ($username !== '' && $username !== $sessionUsername) {
-    // Fetch the profile owner's user ID
-    $stmt = $db->prepare("SELECT id FROM users WHERE username = :uname");
-    $stmt->execute([':uname' => $username]);
-    $user_id = $stmt->fetchColumn();
+    // Only proceed if we're visiting someone else's profile
+    if ($username !== '' && $username !== $sessionUsername) {
+        // Fetch the profile owner's user ID
+        $stmt = $db->prepare("SELECT id FROM users WHERE username = :uname");
+        $stmt->execute([':uname' => $username]);
+        $user_id = $stmt->fetchColumn();
 
-    if ($user_id !== false && $user_id !== null) {
-        // Always record a page view
-        recordPageView($db, $user_id);
+        if ($user_id !== false && $user_id !== null) {
+            // Always record a page view
+            recordPageView($db, $user_id);
 
-        // Conditionally record a QR scan
-        if (isset($_GET['qr_scan']) && $_GET['qr_scan'] === 'true') {
-            recordQRScan($db, $user_id);
+            // Conditionally record a QR scan
+            if (isset($_GET['qr_scan']) && $_GET['qr_scan'] === 'true') {
+                recordQRScan($db, $user_id);
+            }
         }
     }
-}
 
 
-?>
+    ?>
 
 <style>
     .sidebar-title{
@@ -339,7 +339,7 @@ if ($username !== '' && $username !== $sessionUsername) {
 
 <body>
     
-     <?php include "assets/nav.php"; ?>
+     <?php include "assets/nav_profile.php"; ?>
      <a href="https://QRsume.com" target="_blank"
    style="
         position: fixed;
@@ -371,7 +371,7 @@ if ($username !== '' && $username !== $sessionUsername) {
                <div class="col-md-4 text-white p-0 order-sm-first order-last pt-5" style=" background-color: var(--primary);"> <!--position:sticky; top:0;-->
                    <div class="pb-4">
                        <div class="container-fluid w-75">
-                             <img class="img-fluid mb-3" loading="lazy" style="border-radius:9999px; object-fit:contain;" src="images/<?php echo htmlspecialchars   ($personalinfo["personal_photo"]); ?>" alt="Personal photo">
+                             <img class="img-fluid mb-3" loading="lazy" style="border-radius:9999px; object-fit:contain;" src="images/<?php echo htmlspecialchars($personalinfo["personal_photo"]); ?>" alt="Personal photo">
                         </div>
                         <div class="container-fluid justify-content-around d-flex w-75">
                             <?php if (!empty($contactinfo["email"]) && $visibility["email"] == 1): ?>
@@ -408,7 +408,7 @@ if ($username !== '' && $username !== $sessionUsername) {
                    
                     <!-- Contact -->
                     <div class="row">
-                        <?php if (!empty($results["contactinfo"]) && array_sum($visibility)>0  ): ?>
+                        <?php if (!empty($results["contactinfo"]) && array_sum($visibility) > 0): ?>
                          <div class=" border-bottom border-2 border-white my-3 ms-5">
                               <h2 class="fw-bold">Contact</h2>
                          </div>
@@ -494,8 +494,8 @@ if ($username !== '' && $username !== $sessionUsername) {
                <!-- Right part(white) -->
                <div class="col-md-8 container-fluid p-0 ps-2 ps-md-5 pe-3 pe-md-5 pt-5" style="color: var(--primary);">
                    <div class="w-75 mx-auto">
-                         <h1 class="pl-5 display-4" style="color:var(--primary);"><span style="font-weight:bold;"><?php echo htmlspecialchars($personalinfo["personal_name"]); ?></span> <span style="font-weight: 300;"><?php echo htmlspecialchars( $personalinfo["personal_lastname"]); ?></span></h1>
-                         <h2 class="pl-5" style="color:var(--primary);"><?php echo htmlspecialchars( $personalinfo["personal_profession"]); ?></h2>
+                         <h1 class="pl-5 display-4" style="color:var(--primary);"><span style="font-weight:bold;"><?php echo htmlspecialchars($personalinfo["personal_name"]); ?></span> <span style="font-weight: 300;"><?php echo htmlspecialchars($personalinfo["personal_lastname"]); ?></span></h1>
+                         <h2 class="pl-5" style="color:var(--primary);"><?php echo htmlspecialchars($personalinfo["personal_profession"]); ?></h2>
                          <p style="color:var(--secondary); text-align:justify;">
                               <?php echo htmlspecialchars($personalinfo["personal_bio"]); ?>
                          </p>
@@ -597,7 +597,8 @@ if ($username !== '' && $username !== $sessionUsername) {
      
 
 
-     <?php include "assets/footer.php";} ?>
+     <?php include "assets/footer.php";
+} ?>
      
 
 

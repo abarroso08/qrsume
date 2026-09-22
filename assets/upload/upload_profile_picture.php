@@ -1,14 +1,18 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 
 include "../head.php";
 $user_id = $_SESSION['id'];
 $username = $_SESSION['username'];
-$referrer = $_POST['referrer'] ?? '../assets/form.php';
+$referrer = $_POST['referrer'] ?? '../assets/article_form.php';
 
 // 🔁 Function to stop and redirect with error
-function redirectWithError($message, $referrer) {
+function redirectWithError($message, $referrer)
+{
     header("Location: $referrer?errors=" . urlencode($message));
     exit();
 }
@@ -143,4 +147,3 @@ try {
 // ✅ Success redirect
 header("Location: $referrer?success_profile=" . urlencode($success_message));
 exit();
-?>

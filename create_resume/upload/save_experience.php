@@ -1,8 +1,11 @@
 <?php
+
 // Show errors (development only)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+if (php_sapi_name() === 'cli-server') {
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+}
 
 include("../../assets/head.php");
 
@@ -51,7 +54,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
                 'job_name'         => $name,
                 'date'             => $date,
                 'place_of_work'    => $place,
-                'brief_description'=> $desc,
+                'brief_description' => $desc,
             ];
             $ok = db_update($db, 'experience', $data, ['experience_id' => $exp_id, 'user_id' => $user_id]);
         } else {
@@ -61,7 +64,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
                 'job_name'         => $name,
                 'date'             => $date,
                 'place_of_work'    => $place,
-                'brief_description'=> $desc,
+                'brief_description' => $desc,
             ];
             $ok = db_insert($db, 'experience', $data);
         }
@@ -86,4 +89,3 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
 }
 
 // Input cleaning helper
-?>

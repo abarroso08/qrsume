@@ -1,0 +1,12 @@
+# Local dev environment
+local_dev.sqlite
+.claude/
+
+# Secrets - never commit
+.env
+
+# Tooling cache
+.php-cs-fixer.cache
+
+# Composer dependencies - install with `composer install`, don't commit
+/vendor/

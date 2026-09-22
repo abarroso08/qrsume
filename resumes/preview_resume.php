@@ -1,7 +1,9 @@
 <?php
 include("../assets/head.php");
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Ensure resume_id is passed
 if (!isset($_GET['resume_id']) || !is_numeric($_GET['resume_id'])) {
@@ -198,7 +200,7 @@ input[type="text"] {
   </style>
 </head>
 <body>
-<?php include("../assets/nav.php");?>
+<?php include("../assets/nav_profile.php");?>
 
 <div class="text-center my-4 mx-5">
   <h1 class="display-5 fw-bold">Preview Your Resume</h1>

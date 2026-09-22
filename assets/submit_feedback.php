@@ -1,9 +1,10 @@
 <?php
+
 //error_reporting(E_ALL);
 //ini_set('display_errors', 1);
 
 // Include the database connection file
-include('db.php'); 
+include('db.php');
 
 // Set content type to plain text
 header("Content-Type: text/plain");
@@ -19,7 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         try {
             // Prepare the SQL statement with NOW() for submitted_at
             $stmt = $db->prepare("INSERT INTO feedback (rating, comment, submitted_at) VALUES (:rating, :comment, NOW())");
-            
+
             // Bind parameters correctly for PDO
             $stmt->bindValue(":rating", $rating, PDO::PARAM_INT);
             $stmt->bindValue(":comment", $comment, PDO::PARAM_STR);
@@ -43,4 +44,3 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 // If request method is not POST, output an error
 echo "Invalid request.";
 exit;
-?>

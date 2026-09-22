@@ -1,12 +1,14 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+if (php_sapi_name() === 'cli-server') {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 
 include("../assets/head.php");
 
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-  header("Location: ../assets/login.php");
-  exit();
+    header("Location: ../assets/login.php");
+    exit();
 }
 $sectionNumber = isset($_GET['section']) ? (int) $_GET['section'] : 0;
 $prevSection = max(0, $sectionNumber - 1);
@@ -25,10 +27,10 @@ $quick_access_tables = ['personalinfo', 'contactinfo', 'aptitudes', 'education',
 // Fetch User Data
 $results = [];
 foreach ($quick_access_tables as $table) {
-  $query = "SELECT * FROM `$table` WHERE `user_id` = ?";
-  $stmt = $db->prepare($query);
-  $stmt->execute([$_SESSION['id']]);
-  $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $query = "SELECT * FROM `$table` WHERE `user_id` = ?";
+    $stmt = $db->prepare($query);
+    $stmt->execute([$_SESSION['id']]);
+    $results[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 $personalinfo = $results['personalinfo'][0] ?? null;

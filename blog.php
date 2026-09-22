@@ -40,7 +40,9 @@ if (!isset($_GET['user_id'])) {
     foreach ($allTagsRaw as $tagList) {
         $tags = array_map('trim', explode(',', $tagList));
         foreach ($tags as $tag) {
-            if (!empty($tag)) $tagSet[strtolower($tag)] = $tag;
+            if (!empty($tag)) {
+                $tagSet[strtolower($tag)] = $tag;
+            }
         }
     }
     ksort($tagSet);
@@ -49,7 +51,7 @@ if (!isset($_GET['user_id'])) {
 </head>
 
 <body>
-<?php include "assets/nav.php"; ?>
+<?php include "assets/nav_profile.php"; ?>
 
 <div class="container text-center pt-4">
     <h1 class="fw-bold mb-3">Welcome to <?= htmlspecialchars($name) ?>'s blog</h1>
@@ -67,14 +69,14 @@ if (!isset($_GET['user_id'])) {
 
 <div class="container-xxl overflow-hidden">
     <div class="row gy-3 p-md-5 p-3" id="blog">
-        <?php 
-        $stmt_blog = $db->query("SELECT * FROM `blogarticles` WHERE `user_id` = $user_id AND `article_status` = 'published' ORDER BY `article_date` DESC"); 
-        $results_blog["blogarticles"] = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
+        <?php
+        $stmt_blog = $db->query("SELECT * FROM `blogarticles` WHERE `user_id` = $user_id AND `article_status` = 'published' ORDER BY `article_date` DESC");
+$results_blog["blogarticles"] = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
 
-        foreach ($results_blog["blogarticles"] as $article):
-            if ($article["article_status"] == "published"):
-                $tags = explode(',', $article['article_tags']);
-                $dataTags = implode('|', array_map('strtolower', array_map('trim', $tags)));
+foreach ($results_blog["blogarticles"] as $article):
+    if ($article["article_status"] == "published"):
+        $tags = explode(',', $article['article_tags']);
+        $dataTags = implode('|', array_map('strtolower', array_map('trim', $tags)));
         ?>
         <div class="col-sm-6 blog-card" style="display:flex;" data-tags="<?= htmlspecialchars($dataTags) ?>">
     <div class="card text-white border-0 w-100 h-100" style="background-color: var(--primary);">

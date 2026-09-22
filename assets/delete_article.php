@@ -2,34 +2,34 @@
 include "head.php";
 // Check if the admin is logged in
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-     header("Location: ../assets/login.php?redirect_to=" . urlencode($_SERVER['REQUEST_URI']));
-     exit();
+    header("Location: ../assets/login.php?redirect_to=" . urlencode($_SERVER['REQUEST_URI']));
+    exit();
 } else {
 
-     if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['article_id'])) {
-          // Get form input
-          $article_id = $_POST['article_id'];
+    if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['article_id'])) {
+        // Get form input
+        $article_id = $_POST['article_id'];
 
-          // Prepare the SQL query using placeholders for the parameters
-          $sql = "DELETE FROM blogarticles WHERE `blogarticles`.`article_id` = :article_id";
+        // Prepare the SQL query using placeholders for the parameters
+        $sql = "DELETE FROM blogarticles WHERE `blogarticles`.`article_id` = :article_id";
 
-          $stmt = $db->prepare($sql);
+        $stmt = $db->prepare($sql);
 
-          // Bind value to the placeholder
-          $stmt->bindParam(':article_id', $article_id, PDO::PARAM_INT);
+        // Bind value to the placeholder
+        $stmt->bindParam(':article_id', $article_id, PDO::PARAM_INT);
 
-          // Execute the query
-          if ($stmt->execute()) {
-               echo "Article deleted successfully\n";
-               header("Location: ../assets/delete_article.php");
-               exit();
-          } else {
-               echo "Error deleting article.";
-          }
-     }
+        // Execute the query
+        if ($stmt->execute()) {
+            echo "Article deleted successfully\n";
+            header("Location: ../assets/delete_article.php");
+            exit();
+        } else {
+            echo "Error deleting article.";
+        }
+    }
 }
 $stmt_blog = $db->prepare("SELECT * FROM `blogarticles` WHERE `user_id` = :user_id ORDER BY `article_date` DESC");// NOTA: no usar declaraciones preparadas para nombres de tablas
-$stmt_blog->bindValue(":user_id",$_SESSION['id'], PDO::PARAM_INT);
+$stmt_blog->bindValue(":user_id", $_SESSION['id'], PDO::PARAM_INT);
 $stmt_blog->execute();
 $results["blogarticles"]  = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -39,8 +39,8 @@ $results["blogarticles"]  = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
 
      <body>
          <?php
-         include("nav.php");
-         ?>
+         include("nav_profile.php");
+?>
           <div class="container mt-2">
     <!-- Page Header -->
     <div class="text-center h1 py-4 mb-4" style="border-bottom:2px solid var(--primary);color:var(--primary);">
@@ -89,7 +89,7 @@ $results["blogarticles"]  = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
                             <!-- Edit & Delete Buttons -->
                                     <div class="d-flex gap-2 mt-3">
                                         <div class="w-100">
-                                            <a href="/assets/form.php?edit=<?= htmlspecialchars($article["article_id"], ENT_QUOTES, 'UTF-8') ?>" 
+                                            <a href="/assets/article_form.php?edit=<?= htmlspecialchars($article["article_id"], ENT_QUOTES, 'UTF-8') ?>" 
                                            class="btn btn-outline-success w-100">
                                             <i class="bi bi-pencil"></i> Edit
                                         </a>
@@ -124,7 +124,7 @@ $results["blogarticles"]  = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
                 <div class="alert alert-info p-4 rounded-3 shadow-sm">
                     <h5 class="mb-2">You haven't created any articles yet</h5>
                     <p>Start sharing your ideas with the world!</p>
-                    <a href="https://qrsume.com/assets/form.php" class="btn btn-primary">Create Your First Article</a>
+                    <a href="https://qrsume.com/assets/article_form.php" class="btn btn-primary">Create Your First Article</a>
                 </div>
             </div>
         <?php endif; ?>
@@ -133,8 +133,8 @@ $results["blogarticles"]  = $stmt_blog->fetchAll(PDO::FETCH_ASSOC);
     </div>
 
           <?php
-          include("footer.php");
-          ?>
+ include("footer.php");
+?>
           <!-- Include Bootstrap JS (Optional for form validation) -->
           <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
 

@@ -1,8 +1,11 @@
 <?php
+
 // Enable error reporting (development only)
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+if (php_sapi_name() === 'cli-server') {
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+}
 
 include("../../assets/head.php");
 
@@ -67,6 +70,3 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=bad_request");
     exit();
 }
-
-
-?>

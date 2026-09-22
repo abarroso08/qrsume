@@ -1,5 +1,6 @@
 <?php
-$errors=true;
+
+$errors = true;
 include '../assets/db.php';
 
 // Only allow if logged in as admin

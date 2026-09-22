@@ -1,10 +1,11 @@
 <?php
+
 include("../../assets/head.php");
 
 header('Content-Type: application/json'); // For AJAX responses
 
-if ($_SERVER["REQUEST_METHOD"] === "POST" 
-    && isset($_POST['action']) 
+if ($_SERVER["REQUEST_METHOD"] === "POST"
+    && isset($_POST['action'])
     && $_POST['action'] === "save_contactinfo") {
 
     // Check if user is authenticated
@@ -74,29 +75,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
 ];
 
     foreach ($fields as $field_name => $is_visible) {
-    $check = $db->prepare("SELECT COUNT(*) FROM visibility_settings WHERE user_id = ? AND field_name = ?");
-    $check->execute([$user_id, $field_name]);
-    $exists = $check->fetchColumn() > 0;
+        $check = $db->prepare("SELECT COUNT(*) FROM visibility_settings WHERE user_id = ? AND field_name = ?");
+        $check->execute([$user_id, $field_name]);
+        $exists = $check->fetchColumn() > 0;
 
-    if ($exists) {
-        $update = $db->prepare("UPDATE visibility_settings SET is_visible = ? WHERE user_id = ? AND field_name = ?");
-        $update->execute([$is_visible, $user_id, $field_name]);
-    } else {
-        $insert = $db->prepare("INSERT INTO visibility_settings (user_id, field_name, is_visible) VALUES (?, ?, ?)");
-        $insert->execute([$user_id, $field_name, $is_visible]);
+        if ($exists) {
+            $update = $db->prepare("UPDATE visibility_settings SET is_visible = ? WHERE user_id = ? AND field_name = ?");
+            $update->execute([$is_visible, $user_id, $field_name]);
+        } else {
+            $insert = $db->prepare("INSERT INTO visibility_settings (user_id, field_name, is_visible) VALUES (?, ?, ?)");
+            $insert->execute([$user_id, $field_name, $is_visible]);
+        }
     }
-}
-    
+
     if ($record_exists) {
         // Update existing record
         $ok = db_update($db, 'contactinfo', $data, ['user_id' => $user_id]);
-        
+
     } else {
         // Insert new record
         $data['user_id'] = $user_id;
         $ok = db_insert($db, 'contactinfo', $data);
     }
-    
+
 
     if ($ok) {
         // Success — return JSON for AJAX and redirect for fallback
