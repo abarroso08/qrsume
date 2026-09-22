@@ -2,7 +2,10 @@ RewriteEngine On
 
 # Redirect requests that still spell out ".php" to the clean (extension-less) URL,
 # e.g. /assets/login.php -> /assets/login. Checked against the raw request line
-# so it only fires on the visible URL, not on internal rewrites below.
+# so it only fires on the visible URL, not on internal rewrites below. Restricted
+# to GET/HEAD: a 301 makes browsers replay POST bodies as GET, which was silently
+# dropping form submissions (e.g. login) that still post to a ".php" action.
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
 RewriteCond %{THE_REQUEST} \s/+(.+?)\.php[\s?] [NC]
 RewriteRule ^ /%1 [R=301,L]
 
