@@ -995,6 +995,9 @@ $profileText = 'qrsume.com/' . $username;
           <button type="submit" class="btn btn-secondary" formaction="https://qrsume.com/create_pdf.php?lan=es" formtarget="_blank">
             Generar PDF (Español)
           </button>
+          <button type="submit" class="btn btn-outline-secondary" formaction="https://qrsume.com/create_latex.php" formtarget="_blank">
+            Download LaTeX (.tex)
+          </button>
         </div>
         <p class="sidebar-note">The preview is editable. Final PDF spacing may adjust slightly for print formatting.</p>
       </section>
