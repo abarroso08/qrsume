@@ -5,9 +5,6 @@
 <?php
 include "assets/head.php";
 
-$stmt_views = $db->prepare("UPDATE personalinfo SET visits = visits + 1 WHERE user_id = ?");
-$stmt_views ->execute([$user_id]);
-
 if (!isset($_GET['username'])) {
     ?>
     <!-- index.php -->

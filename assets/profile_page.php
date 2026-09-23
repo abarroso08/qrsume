@@ -75,7 +75,12 @@ $firstName = $pi['personal_name'] ?? '';
 $lastName = $pi['personal_lastname'] ?? '';
 $headline = $pi['personal_profession'] ?? '';
 $bio = $pi['personal_bio'] ?? '';
-$visits = (int) ($pi['visits'] ?? 0);
+
+// Lifetime profile views, recorded by recordPageView() in assets/stats.php (same number as the dashboard)
+$stmt_views = $db->prepare("SELECT views FROM user_statistics WHERE user_id = ?");
+$stmt_views->execute([$user_id]);
+$visits = (int) $stmt_views->fetchColumn();
+
 $cvUrl = $pi['cv_url'] ?? '';
 $photo = $pi['personal_photo'] ?? '';
 $hasPhoto = $has($photo) && $photo !== 'default.webp';
@@ -123,7 +128,7 @@ $projects = $results['interests'] ?? [];
 $customSections = $results['custom_sections'] ?? [];
 
 $stmt_articles = $db->prepare("SELECT article_id, article_title, article_summary, article_date, article_photo
-    FROM blogarticles WHERE user_id = ? AND article_status = 'published' ORDER BY article_date DESC LIMIT 6");
+    FROM blogarticles WHERE user_id = ? AND article_status = 'published' ORDER BY article_date DESC LIMIT 3");
 $stmt_articles->execute([$user_id]);
 $articles = $stmt_articles->fetchAll(PDO::FETCH_ASSOC);
 
@@ -237,24 +242,43 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
     .qp {
         max-width: 1320px;
         margin: 0 auto;
-        --qp-nav: 56px; /* fixed navbar height */
+        --qp-nav: 56px; /* fixed navbar height (nav_profile.php adds a spacer of this height) */
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         font-size: 15.5px;
         line-height: 1.55;
     }
+    /* Phones: the side wrapper dissolves so its two halves bookend the content */
+    .qp-side { display: contents; }
+    .qp-id { order: 1; }
+    .qp-main { order: 2; }
+    .qp-extra { order: 3; }
     .qp-id, .qp-extra { background: var(--qp-panel); color: var(--qp-panel-ink); padding: 32px 24px; display: grid; gap: 22px; align-content: start; min-width: 0; }
-    .qp-id { padding-top: calc(var(--qp-nav) + 32px); }
+    .qp-id { padding-top: 32px; }
     .qp-extra { padding-bottom: 48px; }
     .qp-main { padding: 32px 20px 48px; display: grid; gap: 40px; align-content: start; min-width: 0; }
     .qp-desktop { display: none; }
 
+    /* Desktop: one sidebar that stays on screen while only the content scrolls */
     @media (min-width: 768px) {
-        .qp { grid-template-columns: minmax(290px, 34%) minmax(0, 1fr); grid-template-areas: "id main" "extra main"; grid-template-rows: auto 1fr; }
-        .qp.side-right { grid-template-columns: minmax(0, 1fr) minmax(290px, 34%); grid-template-areas: "main id" "main extra"; }
-        .qp-id { grid-area: id; padding: calc(var(--qp-nav) + 48px) 36px 8px; }
-        .qp-extra { grid-area: extra; padding: 14px 36px 56px; }
-        .qp-main { grid-area: main; padding: calc(var(--qp-nav) + 56px) clamp(28px, 5vw, 72px) 64px; gap: 48px; }
+        /* Overlap the navbar spacer so the panel can run to the very top: the navbar hides on scroll */
+        .qp { grid-template-columns: minmax(290px, 32%) minmax(0, 1fr); margin-top: calc(-1 * var(--qp-nav)); }
+        .qp.side-right { grid-template-columns: minmax(0, 1fr) minmax(290px, 32%); }
+        .qp.side-right .qp-side { order: 2; }
+        .qp.side-right .qp-main { order: 1; }
+        .qp-side {
+            display: flex; flex-direction: column; justify-content: safe center;
+            gap: clamp(10px, 2vh, 22px);
+            position: sticky; top: 0; align-self: start;
+            height: 100vh; height: 100dvh;
+            padding: calc(var(--qp-nav) + clamp(12px, 3vh, 36px)) 30px clamp(14px, 3vh, 36px);
+            background: var(--qp-panel); color: var(--qp-panel-ink);
+            /* Fallback when a profile has more than fits: scroll inside the panel, never clip */
+            overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+            scrollbar-color: var(--qp-panel-line) transparent;
+        }
+        .qp-id, .qp-extra { background: none; padding: 0; gap: clamp(10px, 2vh, 22px); }
+        .qp-main { padding: calc(var(--qp-nav) + 52px) clamp(28px, 5vw, 72px) 64px; gap: 48px; }
         .qp-desktop { display: block; }
         .qp-mobile { display: none !important; }
     }
@@ -311,10 +335,13 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
     .qp-langs span { color: var(--qp-panel-muted); font-size: 13.5px; text-align: right; font-family: var(--qp-font-label); }
     .qp-panel .qp-more, .qp-extra .qp-more { color: var(--qp-panel-muted); }
 
-    .qp-share { background: var(--qp-bg); color: var(--qp-ink); border-radius: 16px; padding: 16px; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; align-items: center; }
-    .qp-share img { width: 96px; height: 96px; background: #fff; border-radius: 8px; padding: 4px; border: 1px solid var(--qp-line); }
-    .qp-share p { margin: 0 0 4px; font-size: 13px; color: var(--qp-muted); }
-    .qp-share .qp-url { display: block; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; margin-bottom: 10px; font-family: var(--qp-font-label); }
+    .qp-share { background: var(--qp-bg); color: var(--qp-ink); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px 14px; align-items: center; }
+    .qp-share img { width: 76px; height: 76px; background: #fff; border-radius: 8px; padding: 3px; border: 1px solid var(--qp-line); }
+    .qp-share p { margin: 0 0 2px; font-size: 13px; color: var(--qp-muted); }
+    .qp-share .qp-url { display: block; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; font-family: var(--qp-font-label); }
+    .qp-share .qp-btn { grid-column: 1 / -1; justify-content: center; }
+    .qp-extra .qp-share .qp-btn { border-color: var(--qp-accent-text); color: var(--qp-accent-text); }
+    .qp-extra .qp-share .qp-btn:hover { background: var(--qp-accent-soft); }
 
     /* ---- Buttons ---- */
     .qp-actions { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -374,17 +401,56 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
     .qp-when { margin: 2px 0 0; font-size: 13.5px; color: var(--qp-muted); font-family: var(--qp-font-label); }
     .qp-desc { margin: 8px 0 0; overflow-wrap: anywhere; color: var(--qp-ink); max-width: 72ch; }
 
-    .qp-feat { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 16px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; }
-    .qp-feat a { scroll-snap-align: start; display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--qp-line); border-radius: 14px; overflow: hidden; text-decoration: none; color: var(--qp-ink); background: var(--qp-bg); transition: border-color .15s, transform .15s; }
+    #featured { container-type: inline-size; }
+    .qp-feat { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .qp-feat a { display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--qp-line); border-radius: 14px; overflow: hidden; text-decoration: none; color: var(--qp-ink); background: var(--qp-bg); transition: border-color .15s, transform .15s; }
     .qp-feat a:hover { border-color: var(--qp-accent-text); transform: translateY(-2px); }
     .qp-feat img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: var(--qp-accent-soft); }
     .qp-feat .body { padding: 14px 16px 16px; }
     .qp-feat h3 { margin: 0; font-size: 1rem; font-weight: 700; line-height: 1.3; }
-    .qp-feat p { margin: 6px 0 0; font-size: 14px; color: var(--qp-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+    .qp-feat h3, .qp-feat p { overflow-wrap: anywhere; }
+    .qp-feat p { margin: 6px 0 0; font-size: 14px; color: var(--qp-muted); }
+    /* Narrow (or a single article): horizontal rows, image on the left */
+    .qp-feat a { grid-template-columns: 120px minmax(0, 1fr); grid-template-rows: none; }
+    .qp-feat img { height: 100%; min-height: 96px; aspect-ratio: auto; }
+    /* Wide enough for 2-3 articles side by side: vertical cards, one column each */
+    @container (min-width: 540px) {
+        .qp-feat.n-2, .qp-feat.n-3 { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+        .qp-feat.n-2 a, .qp-feat.n-3 a { grid-template-columns: none; grid-template-rows: auto 1fr; }
+        .qp-feat.n-2 img, .qp-feat.n-3 img { height: auto; min-height: 0; aspect-ratio: 16 / 9; }
+    }
+    @container (min-width: 380px) {
+        .qp-feat a { grid-template-columns: 160px minmax(0, 1fr); }
+    }
     .qp-feat time { display: block; margin-top: 10px; font-size: 12.5px; color: var(--qp-muted); font-family: var(--qp-font-label); }
 
     .qp-made { text-align: center; font-size: 13.5px; color: var(--qp-muted); padding: 22px 16px 0; }
     .qp-made a { color: var(--qp-accent-text); font-weight: 600; text-decoration: none; }
+
+    .qp-slot { display: grid; gap: 40px; }
+    .qp-slot:empty { display: none; }
+    .qp-slot .qp-chips li { background: var(--qp-accent-soft); color: var(--qp-accent-text); }
+    .skills-list .qp-slot .qp-chips li { background: none; color: var(--qp-ink); border-color: var(--qp-line); }
+    .qp-slot .qp-langs { max-width: 420px; }
+    .qp-slot .qp-langs span { color: var(--qp-muted); }
+
+    /* Desktop sidebar: everything scales with screen height so it fits without scrolling */
+    @media (min-width: 768px) {
+        .qp-avatar { width: clamp(84px, 17vh, 180px); border-width: 3px; font-size: clamp(2rem, 5vh, 3.6rem); }
+        .qp-photo-wrap { gap: 8px; }
+        .qp-socials a { width: clamp(34px, 5vh, 42px); height: clamp(34px, 5vh, 42px); font-size: 1.05rem; }
+        .qp-panel-title { margin-bottom: clamp(6px, 1.2vh, 12px); padding-bottom: 6px; }
+        .qp-contact { gap: 6px; }
+        .qp-contact small { display: none; }
+        .qp-contact li { grid-template-columns: 18px minmax(0, 1fr); font-size: 14.5px; }
+        .qp-contact i { font-size: .95rem; }
+        .qp-chips { gap: 6px; }
+        .qp-chips li { padding: 3px 11px; font-size: 13.5px; }
+        .qp-langs { gap: 4px; font-size: 14.5px; }
+        .qp-share { padding: 10px 12px; grid-template-columns: clamp(52px, 8vh, 72px) minmax(0, 1fr); gap: 8px 12px; }
+        .qp-share img { width: 100%; height: auto; aspect-ratio: 1; }
+        .qp-share .qp-btn { padding: 5px 12px; font-size: 13.5px; }
+    }
 
     /* Long names must not wrap the fixed navbar onto two lines */
     .qp-body .navbar-brand { max-width: calc(100% - 72px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -399,6 +465,7 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
 
 <div class="<?= $e($qpClasses) ?>">
 
+    <div class="qp-side">
     <!-- Identity panel: photo, name (phones), socials, contact -->
     <aside class="qp-id">
         <div class="qp-photo-wrap">
@@ -447,6 +514,46 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
         <?php endif; ?>
     </aside>
 
+
+    <!-- Panel extras: skills, languages, CV, share -->
+    <aside class="qp-extra">
+        <?php if ($skills): ?>
+            <section data-movable>
+                <h2 class="qp-panel-title">Skills</h2>
+                <ul class="qp-chips">
+                    <?php foreach ($skills as $i => $skill): ?>
+                        <li<?= $i >= $skillLimit ? ' data-extra hidden' : '' ?>><?= $e($skill) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+                <?php if (count($skills) > $skillLimit): ?>
+                    <button type="button" class="qp-more" data-skills="<?= count($skills) ?>">Show all <?= count($skills) ?> skills</button>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($languages): ?>
+            <section data-movable>
+                <h2 class="qp-panel-title">Languages</h2>
+                <ul class="qp-langs">
+                    <?php foreach ($languages as $lang): ?>
+                        <li><b><?= $e($lang['language']) ?></b><?php if ($has($lang['level'])): ?><span><?= $e($lang['level']) ?></span><?php endif; ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </section>
+        <?php endif; ?>
+
+
+        <section class="qp-share">
+            <?php if ($qrDataUri): ?><img src="<?= $qrDataUri ?>" alt="QR code linking to this profile"><?php endif; ?>
+            <div>
+                <p>Share this profile</p>
+                <span class="qp-url" id="qp-url">qrsume.com/<wbr><?= $e($username_url) ?></span>
+                <button type="button" class="qp-btn" id="qp-copy" data-url="https://<?= $e($profileUrl) ?>"><i class="bi bi-link-45deg"></i>Copy link</button>
+            </div>
+        </section>
+    </aside>
+    </div>
+
     <!-- Content column -->
     <main class="qp-main">
         <header class="qp-hero">
@@ -467,7 +574,7 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
                             <a class="qp-btn primary" href="tel:<?= $e($phoneHref) ?>"><i class="bi bi-telephone"></i>Call</a>
                         <?php endif; ?>
                         <?php if ($has($cvUrl)): ?>
-                            <a class="qp-btn" href="https://qrsume.com/<?= $e($cvUrl) ?>" target="_blank" download="CV.pdf"><i class="bi bi-download"></i>Download CV</a>
+                            <a class="qp-btn" id="cv" href="https://qrsume.com/<?= $e($cvUrl) ?>" target="_blank" download="CV.pdf"><i class="bi bi-download"></i>Download CV</a>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
@@ -480,10 +587,13 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
             <?php endif; ?>
         </header>
 
+        <!-- Filled by script on desktop when the sidebar is taller than the screen -->
+        <div class="qp-slot"></div>
+
         <?php if ($articles): ?>
             <section id="featured">
                 <h2 class="qp-sec-title">Featured <a href="blog.php/?user_id=<?= (int) $user_id ?>">See all</a></h2>
-                <div class="qp-feat">
+                <div class="qp-feat n-<?= count($articles) ?>" style="--n:<?= count($articles) ?>">
                     <?php foreach ($articles as $a): ?>
                         <a href="article.php?user_id=<?= (int) $user_id ?>&id=<?= (int) $a['article_id'] ?>">
                             <img src="images/<?= $e($a['article_photo']) ?>" alt="" loading="lazy">
@@ -535,50 +645,6 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
             <?php endif; ?>
         <?php endforeach; ?>
     </main>
-
-    <!-- Panel extras: skills, languages, CV, share -->
-    <aside class="qp-extra">
-        <?php if ($skills): ?>
-            <section>
-                <h2 class="qp-panel-title">Skills</h2>
-                <ul class="qp-chips">
-                    <?php foreach ($skills as $i => $skill): ?>
-                        <li<?= $i >= $skillLimit ? ' data-extra hidden' : '' ?>><?= $e($skill) ?></li>
-                    <?php endforeach; ?>
-                </ul>
-                <?php if (count($skills) > $skillLimit): ?>
-                    <button type="button" class="qp-more" data-skills="<?= count($skills) ?>">Show all <?= count($skills) ?> skills</button>
-                <?php endif; ?>
-            </section>
-        <?php endif; ?>
-
-        <?php if ($languages): ?>
-            <section>
-                <h2 class="qp-panel-title">Languages</h2>
-                <ul class="qp-langs">
-                    <?php foreach ($languages as $lang): ?>
-                        <li><b><?= $e($lang['language']) ?></b><?php if ($has($lang['level'])): ?><span><?= $e($lang['level']) ?></span><?php endif; ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            </section>
-        <?php endif; ?>
-
-        <?php if ($has($cvUrl)): ?>
-            <section id="cv" class="qp-desktop">
-                <h2 class="qp-panel-title">Resume</h2>
-                <a class="qp-btn primary" href="https://qrsume.com/<?= $e($cvUrl) ?>" target="_blank" download="CV.pdf"><i class="bi bi-download"></i>Download <?= $e($firstName) ?>'s CV</a>
-            </section>
-        <?php endif; ?>
-
-        <section class="qp-share">
-            <?php if ($qrDataUri): ?><img src="<?= $qrDataUri ?>" alt="QR code linking to this profile"><?php endif; ?>
-            <div>
-                <p>Share this profile</p>
-                <span class="qp-url" id="qp-url"><?= $e($profileUrl) ?></span>
-                <button type="button" class="qp-btn" id="qp-copy" data-url="https://<?= $e($profileUrl) ?>"><i class="bi bi-link-45deg"></i>Copy link</button>
-            </div>
-        </section>
-    </aside>
 </div>
 
 <p class="qp-made">Made with QRsume · <a href="https://qrsume.com/assets/register.php">Create your own profile</a></p>
@@ -615,8 +681,27 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
             }
         }
     });
-    var t; window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(measure, 120); });
+    // Desktop: keep the whole sidebar on screen. If it is taller than the window,
+    // move skills, then languages, into the content column (and back when it fits).
+    var side = document.querySelector('.qp-side'), slot = document.querySelector('.qp-slot');
+    var movable = Array.prototype.slice.call(document.querySelectorAll('[data-movable]'));
+    var anchors = movable.map(function (sec) { var a = document.createComment('movable'); sec.parentNode.insertBefore(a, sec); return a; });
+    function place(sec, inContent) {
+        var title = sec.querySelector('h2');
+        title.className = inContent ? 'qp-sec-title' : 'qp-panel-title';
+        if (inContent) slot.appendChild(sec); else anchors[movable.indexOf(sec)].after(sec);
+    }
+    function fitSide() {
+        if (!side || !slot) return;
+        movable.forEach(function (sec) { place(sec, false); });
+        if (!window.matchMedia('(min-width: 768px)').matches) return;
+        for (var i = 0; i < movable.length && side.scrollHeight > side.clientHeight + 1; i++) place(movable[i], true);
+    }
+    document.addEventListener('click', function (ev) { if (ev.target.closest('[data-skills]')) fitSide(); });
+
+    var t; window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { fitSide(); measure(); }, 120); });
+    fitSide();
     measure();
-    if (document.fonts) document.fonts.ready.then(measure);
+    if (document.fonts) document.fonts.ready.then(function () { fitSide(); measure(); });
 })();
 </script>

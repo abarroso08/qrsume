@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS personalinfo (
     personal_profession   TEXT,
     personal_bio          TEXT,
     cv_url                TEXT,
-    visits                INTEGER DEFAULT 0, -- found live in index.php: UPDATE personalinfo SET visits = visits + 1
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
