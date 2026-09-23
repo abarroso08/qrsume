@@ -368,7 +368,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
           <div class="row "> <!-- align-items-start -->
                <!-- Left part(Color) -->
-               <div class="col-md-4 text-white p-0 order-sm-first order-last pt-5" style=" background-color: var(--primary);"> <!--position:sticky; top:0;-->
+               <div class="col-md-4 text-white p-0 pt-5" style=" background-color: var(--primary);"> <!--position:sticky; top:0;-->
                    <div class="pb-4">
                        <div class="container-fluid w-75">
                              <img class="img-fluid mb-3" loading="lazy" style="border-radius:9999px; object-fit:contain;" src="images/<?php echo htmlspecialchars($personalinfo["personal_photo"]); ?>" alt="Personal photo">
