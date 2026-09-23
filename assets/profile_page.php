@@ -286,7 +286,7 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
     /* ---- Identity panel ---- */
     .qp-photo-wrap { display: grid; justify-items: center; gap: 12px; }
     .qp-avatar {
-        width: min(200px, 60%); aspect-ratio: 1; max-width: 100%;
+        width: min(230px, 66%); aspect-ratio: 1; max-width: 100%;
         border-radius: 50%; overflow: hidden; display: grid; place-items: center;
         border: 4px solid color-mix(in srgb, var(--qp-panel-ink) 85%, transparent);
         background: var(--qp-panel-chip); color: var(--qp-panel-ink);
@@ -436,7 +436,7 @@ $timeline = function (array $rows, string $orgKey, string $titleKey) use ($e, $h
 
     /* Desktop sidebar: everything scales with screen height so it fits without scrolling */
     @media (min-width: 768px) {
-        .qp-avatar { width: clamp(84px, 17vh, 180px); border-width: 3px; font-size: clamp(2rem, 5vh, 3.6rem); }
+        .qp-avatar { width: clamp(100px, 21vh, 220px); border-width: 3px; font-size: clamp(2.2rem, 6vh, 4.2rem); }
         .qp-photo-wrap { gap: 8px; }
         .qp-socials a { width: clamp(34px, 5vh, 42px); height: clamp(34px, 5vh, 42px); font-size: 1.05rem; }
         .qp-panel-title { margin-bottom: clamp(6px, 1.2vh, 12px); padding-bottom: 6px; }

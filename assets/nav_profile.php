@@ -1,8 +1,3 @@
-<style>
-    #navbar {
-    transition: top 0.3s ease-in-out;
-}
-</style>
 <nav id="navbar" class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
           <div class="container-fluid">
               <?php
@@ -61,24 +56,8 @@
      </nav>
 <div id="nav-spacer" style="height:60px;"></div> <!-- This spacer will take the navbar's height -->
 <script>
-    // Store the previous scroll position
-    let lastScrollTop = 0;
     const navbar = document.getElementById("navbar");
 
-    // Adjust the navbar when the user scrolls
-    window.addEventListener("scroll", function() {
-        let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-        
-        if (currentScroll > lastScrollTop) {
-            // Scrolling down, hide the navbar
-            navbar.style.top = "-80px";  // Adjust the height of the navbar here
-        } else {
-            // Scrolling up, show the navbar
-            navbar.style.top = "0";
-        }
-        lastScrollTop = currentScroll <= 0 ? 0 : currentScroll; // Prevent negative scrolling
-    });
-    
     // Adjust spacer height when the page loads or when resized
     function adjustNavSpacer() {
         let navHeight = navbar.offsetHeight;
