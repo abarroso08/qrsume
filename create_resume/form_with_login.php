@@ -16,6 +16,13 @@ $nextSection = $sectionNumber + 1;
 $isLastSection = ($sectionNumber == 7);
 $isFirstSection = ($sectionNumber == 0);
 
+// The Aptitudes/Languages/Projects panels (sections 4-6) are rendered out of
+// order in the markup below, so the <form> actually visible for a given
+// $sectionNumber isn't always form-<sectionNumber>. Map to the real form id
+// so "Save & Next" submits the form the user is looking at.
+$formIdBySection = [4 => 5, 5 => 6, 6 => 4];
+$submitFormId = $formIdBySection[$sectionNumber] ?? $sectionNumber;
+
 $highlightStyle = 'background-color: rgba(241, 85, 85, 0.15); border: 2px solid #F15555; border-radius: 8px;';
 // Generate CSRF token
 if (!isset($_SESSION['csrf_token'])) {
@@ -963,7 +970,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
           <!-- Next/Finish Button -->
           <button
   type="submit"
-  form="form-<?= $sectionNumber ?>"
+  form="form-<?= $submitFormId ?>"
   class="btn btn-primary fw-semibold px-4 py-2 shadow-sm border-0"
   style="border-radius: 999px; background-color: #2563eb;"
   id="nextBtn">
