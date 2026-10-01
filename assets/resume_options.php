@@ -49,6 +49,22 @@ function resumeSectionTitles(string $language): array
 }
 
 /**
+ * Section headings the user renamed in the preview (section_titles[key]), trimmed and non-empty.
+ */
+function resumeSectionTitleOverrides(): array
+{
+    $overrides = [];
+    foreach ((array) ($_POST['section_titles'] ?? []) as $key => $title) {
+        $title = trim((string) $title);
+        if (in_array($key, RESUME_BUILT_IN_SECTIONS, true) && $title !== '') {
+            $overrides[$key] = mb_substr($title, 0, 80);
+        }
+    }
+
+    return $overrides;
+}
+
+/**
  * Parse the comma-separated section order sent by preview.php.
  * Unknown keys and duplicates are dropped; missing sections keep their default position at the end.
  */
@@ -113,6 +129,37 @@ function resumeJobTitle(array $experience): string
     );
 
     return implode(' - ', $parts);
+}
+
+/**
+ * Posted list entries (education[], experience[], ...) with every expected field present as a string.
+ * Entries can be added in the preview, so nothing guarantees all fields are posted.
+ */
+function resumeEntries(mixed $entries, array $fields): array
+{
+    $clean = [];
+    foreach (is_array($entries) ? $entries : [] as $key => $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        foreach ($fields as $field) {
+            $entry[$field] = is_string($entry[$field] ?? null) ? $entry[$field] : '';
+        }
+        $clean[$key] = $entry;
+    }
+
+    return $clean;
+}
+
+/**
+ * "English (Native)", or just "English" when no level is given.
+ */
+function resumeLanguageLine(array $language): string
+{
+    $name = trim((string) ($language['language'] ?? ''));
+    $level = trim((string) ($language['level'] ?? ''));
+
+    return $level === '' ? $name : "$name ($level)";
 }
 
 /**

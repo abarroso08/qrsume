@@ -121,12 +121,12 @@ try {
     $contact['phone_number']       = $_POST['phone_number'] ?? '';
 
     $personal["personal_bio"] = $_POST['personal_bio'] ?? '';
-    $education  = $_POST['education'] ?? [];
-    $experience = $_POST['experience'] ?? [];
-    $skills     = $_POST['skills'] ?? [];
-    $languages  = $_POST['languages'] ?? [];
-    $interests  = $_POST['projects'] ?? [];
-    $custom_sections  = $_POST['custom_sections'] ?? [];
+    $education  = resumeEntries($_POST['education'] ?? [], ['name_of_studies', 'date', 'place_of_study', 'desc']);
+    $experience = resumeEntries($_POST['experience'] ?? [], ['job_name', 'place_of_work', 'date', 'brief_description']);
+    $skills     = resumeEntries($_POST['skills'] ?? [], ['aptitude']);
+    $languages  = resumeEntries($_POST['languages'] ?? [], ['language', 'level']);
+    $interests  = resumeEntries($_POST['projects'] ?? [], ['interest', 'description']);
+    $custom_sections  = resumeEntries($_POST['custom_sections'] ?? [], ['section_title', 'section_content']);
 
     $sectionOrder = resumeSectionOrder((string) ($_POST['section_order'] ?? ''), array_keys($custom_sections));
 
@@ -157,6 +157,9 @@ if ($display_photo) {
         }
     }
 }
+
+$pageCountOnly = isset($_GET['page_count']);
+$hasPhoto = $photoData !== null || ($pageCountOnly && $display_photo && isset($_POST['photo_pending']));
 
 // Include TCPDF
 require 'vendor/autoload.php';
@@ -207,6 +210,9 @@ $languages_dots = "• ";
 
 $titles = array_map('mb_strtoupper', resumeSectionTitles(resumeLanguage()));
 $titles['full_profile'] = resumeSectionTitles(resumeLanguage())['full_profile'];
+foreach (resumeSectionTitleOverrides() as $key => $title) {
+    $titles[$key] = mb_strtoupper($title);
+}
 
 $profileText = "qrsume.com/" . $username;
 $profileUrl = "https://qrsume.com/" . rawurlencode($username);
@@ -223,13 +229,15 @@ $headerX = $marginL;
 $headerWidth = $pageWidth - $marginL - $marginR;
 $photoWidth = 66;
 $photoHeight = 78;
-$nameHeight = $nameFontSize * 1.1;
+$nameHeight = $nameFontSize * 1.25; // TCPDF never makes a cell shorter than font size x 1.25
 $contactHeight = $contentFontSize + 4;
 
-if ($photoData !== null) {
-    $pdf->Image('@' . $photoData, $marginL, $headerTop, $photoWidth, $photoHeight, 'JPG');
-    $pdf->SetLineStyle(array('width' => 0.75, 'color' => array(207, 207, 207)));
-    $pdf->Rect($marginL, $headerTop, $photoWidth, $photoHeight);
+if ($hasPhoto) {
+    if ($photoData !== null) {
+        $pdf->Image('@' . $photoData, $marginL, $headerTop, $photoWidth, $photoHeight, 'JPG');
+        $pdf->SetLineStyle(array('width' => 0.75, 'color' => array(207, 207, 207)));
+        $pdf->Rect($marginL, $headerTop, $photoWidth, $photoHeight);
+    }
 
     // Name and contact sit right next to the photo, left-aligned
     $header_position = "L";
@@ -280,7 +288,7 @@ if ($linkText !== '') {
 
 $pdf->Ln($contactHeight);
 
-if ($photoData !== null) {
+if ($hasPhoto) {
     $pdf->SetY(max($pdf->GetY(), $headerTop + $photoHeight + 5));
 }
 
@@ -401,7 +409,7 @@ foreach ($sectionOrder as $sectionKey) {
             $pdf->SetFont($fontName, '', $contentFontSize);
             $counterLang = 1;
             foreach ($languages as $lang) {
-                $text = $languages_dots . "{$lang['language']} ({$lang['level']})";
+                $text = $languages_dots . resumeLanguageLine($lang);
                 if ($counterLang == 1) {
                     $pdf->Cell($pageWidth / 2, 15, $text, 0, 0, 'L');
                     $counterLang++;
@@ -476,6 +484,12 @@ foreach ($sectionOrder as $sectionKey) {
 }
 
 
+
+if ($pageCountOnly) {
+    header('Content-Type: application/json');
+    echo json_encode(['pages' => $pdf->getNumPages()]);
+    exit();
+}
 
 // ========== QR CODE + BOTTOM LINK ==========
 if ($display_branding) {

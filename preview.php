@@ -6,7 +6,8 @@ declare(strict_types=1);
  * -----------------------------------------------------------------------------
  * Purpose:
  * - Load one user's resume data.
- * - Let the user edit the preview directly.
+ * - Show an A4 sheet laid out like create_pdf.php, split into pages where the PDF breaks.
+ * - Let the user edit any text on the sheet, and add, remove or reorder entries.
  * - Let the user choose visible sections and section order.
  * - Let premium users remove QR code and QRsume links from the generated PDF.
  * - Show free users a small preview of the branding they are paying to remove.
@@ -114,17 +115,131 @@ $resumeLanguage = resumeLanguage();
 $sectionTitles = ['en' => resumeSectionTitles('en'), 'es' => resumeSectionTitles('es')];
 $profileUrl = 'https://qrsume.com/' . $username;
 $profileText = 'qrsume.com/' . $username;
+
+// -----------------------------------------------------------------------------
+// Sheet rendering
+// -----------------------------------------------------------------------------
+
+/**
+ * One editable piece of text on the sheet. Its text is posted as $name when the PDF is generated.
+ */
+function editable(
+    string $name,
+    ?string $value,
+    string $placeholder,
+    string $class = '',
+    string $tag = 'span',
+    bool $multiline = false,
+    string $attributes = ''
+): string {
+    $value = str_replace(["\r\n", "\r"], "\n", (string) $value);
+
+    return sprintf(
+        '<%1$s class="ed %2$s" contenteditable="plaintext-only" spellcheck="true" data-name="%3$s" data-placeholder="%4$s"%5$s%6$s>%7$s</%1$s>',
+        $tag,
+        $class,
+        e($name),
+        e($placeholder),
+        $multiline ? ' data-multiline' : '',
+        $attributes !== '' ? ' ' . $attributes : '',
+        e(trim($value) === '' ? '' : $value)
+    );
+}
+
+function entryTools(): string
+{
+    return '<div class="entry-tools" contenteditable="false">'
+        . '<button type="button" data-action="up" title="Move up" aria-label="Move up">&uarr;</button>'
+        . '<button type="button" data-action="down" title="Move down" aria-label="Move down">&darr;</button>'
+        . '<button type="button" data-action="remove" title="Remove from this resume" aria-label="Remove">&times;</button>'
+        . '</div>';
+}
+
+function itemRemoveButton(): string
+{
+    return '<button type="button" class="item-remove" data-action="remove" contenteditable="false" title="Remove" aria-label="Remove">&times;</button>';
+}
+
+function sectionHeading(string $key, string $title, string $addType = ''): string
+{
+    $html = '<h2 class="pb sheet-heading">'
+        . editable("section_titles[$key]", $title, 'Section title', 'sheet-heading-text', 'span', false, 'data-default-title="' . e($key) . '"');
+
+    if ($addType !== '') {
+        $html .= '<button type="button" class="sheet-add" data-add="' . e($addType) . '" contenteditable="false">+ Add</button>';
+    }
+
+    return $html . '</h2>';
+}
+
+function renderEducationEntry(string $i, array $edu): string
+{
+    return '<div class="sheet-entry" data-entry>' . entryTools()
+        . '<div class="pb sheet-row">'
+        . editable("education[$i][name_of_studies]", $edu['name_of_studies'] ?? '', 'Degree / studies', 'sheet-row-title', 'div')
+        . editable("education[$i][date]", $edu['date'] ?? '', 'Date', 'sheet-row-date', 'div')
+        . '</div>'
+        . editable("education[$i][place_of_study]", $edu['place_of_study'] ?? '', 'Institution', 'pb sheet-text', 'div')
+        . editable("education[$i][desc]", $edu['brief_description'] ?? '', 'Description', 'pb sheet-text edu-desc', 'div', true)
+        . '</div>';
+}
+
+function renderExperienceEntry(string $i, array $exp): string
+{
+    return '<div class="sheet-entry" data-entry>' . entryTools()
+        . '<div class="pb sheet-row"><div class="sheet-row-title">'
+        . editable("experience[$i][job_name]", $exp['job_name'] ?? '', 'Job title')
+        . '<span class="job-sep"> - </span>'
+        . editable("experience[$i][place_of_work]", $exp['place_of_work'] ?? '', 'Company')
+        . '</div>'
+        . editable("experience[$i][date]", $exp['date'] ?? '', 'Date', 'sheet-row-date', 'div')
+        . '</div>'
+        . editable("experience[$i][brief_description]", $exp['brief_description'] ?? '', 'Describe your responsibilities and achievements', 'pb sheet-text sheet-indented', 'div', true)
+        . '</div>';
+}
+
+function renderSkillItem(string $i, array $skill): string
+{
+    return '<div class="sheet-grid-item" data-entry>' . itemRemoveButton() . '• '
+        . editable("skills[$i][aptitude]", $skill['aptitude'] ?? '', 'Skill')
+        . '</div>';
+}
+
+function renderLanguageItem(string $i, array $lang): string
+{
+    return '<div class="sheet-grid-item" data-entry>' . itemRemoveButton() . '• '
+        . editable("languages[$i][language]", $lang['language'] ?? '', 'Language')
+        . '<span class="level-open"> (</span>'
+        . editable("languages[$i][level]", $lang['level'] ?? '', 'Level')
+        . '<span class="level-close">)</span></div>';
+}
+
+function renderProjectEntry(string $i, array $project): string
+{
+    return '<div class="sheet-entry" data-entry>' . entryTools()
+        . '<div class="pb sheet-text sheet-project-title">• '
+        . editable("projects[$i][interest]", $project['interest'] ?? '', 'Project title')
+        . '</div>'
+        . editable("projects[$i][description]", $project['description'] ?? '', 'Project description', 'pb sheet-html', 'div')
+        . '</div>';
+}
+
+/**
+ * Wrap two-column list items in rows of two, like the PDF prints them.
+ */
+function renderGridRows(array $items): string
+{
+    $html = '';
+    foreach (array_chunk($items, 2) as $row) {
+        $html .= '<div class="pb sheet-grid-row">' . implode('', $row) . '</div>';
+    }
+
+    return $html;
+}
 ?>
 
 <style>
   :root {
-    --preview-page-width: 794px; /* A4 at 96dpi, same paper as the PDF */
-    --preview-page-min-height: 1123px;
-    --resume-font-base: 16px;
-    --resume-font-title: 18px;
-    --resume-font-section: 22px;
-    --resume-font-name: 40px;
-    --resume-gap: 10px;
     --sidebar-width: 320px;
     --navbar-height: 56px;
   }
@@ -451,7 +566,7 @@ $profileText = 'qrsume.com/' . $username;
   }
 
   .preview-topbar {
-    max-width: var(--preview-page-width);
+    max-width: 595.28pt;
     margin: 0 auto 1rem;
     display: flex;
     justify-content: space-between;
@@ -465,260 +580,469 @@ $profileText = 'qrsume.com/' . $username;
     color: #212529;
   }
 
-  .resume-container {
-    position: relative;
-    width: var(--preview-page-width);
-    min-height: var(--preview-page-min-height);
-    margin: auto;
-    padding: 2.5rem;
-    padding-bottom: 5.5rem;
-    background: #ffffff;
-    box-shadow: 0 0 14px rgba(0, 0, 0, .13);
-    font-family: 'Times New Roman', Times, serif;
-    font-size: var(--resume-font-base);
-    color: #111;
-  }
-
-  .resume-header {
-    display: flex;
-    align-items: center;
-    gap: 1.2rem;
-    margin-bottom: calc(var(--resume-gap) * .7);
-  }
-
-  .resume-header__main {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .name-row,
-  .contact-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: .35rem;
-  }
-
-  .name-row .editable-input {
-    font-size: var(--resume-font-name);
-    font-weight: 700;
-    line-height: 1.05;
-  }
-
-  .name-row,
-  .contact-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: .35rem;
-  }
-
-  /* With a photo, name and contact start right after it (same as the PDF) */
-  .resume-header.has-photo .name-row,
-  .resume-header.has-photo .contact-row {
-    justify-content: flex-start;
-  }
-
-  .resume-header.has-photo .name-row .editable-input,
-  .resume-header.has-photo .contact-row .editable-input {
+  .page-badge {
     flex: 0 0 auto;
-    text-align: left !important;
-  }
-
-  .qrsume-preview-link,
-  .qrsume-bottom-link {
-    color: #2563eb;
-    font-size: var(--resume-font-base);
-    font-weight: 500;
-    text-decoration: underline;
+    padding: .25rem .65rem;
+    border: 1px solid #bbf7d0;
+    border-radius: 999px;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: .8rem;
+    font-weight: 700;
     white-space: nowrap;
   }
 
-  .resume-branding-bottom-link {
-    position: absolute;
-    left: 50%;
-    bottom: 1.35rem;
-    transform: translateX(-50%);
-    text-align: center;
-    z-index: 2;
+  .page-badge.is-multi {
+    border-color: #fde68a;
+    background: #fffbeb;
+    color: #92400e;
   }
 
-  .resume-branding-qr {
-    position: absolute;
-    right: 2rem;
-    bottom: 1.2rem;
-    width: 64px;
-    text-align: center;
-    z-index: 2;
+  .page-badge.is-checking {
+    opacity: .65;
   }
 
-  .resume-branding-qr-box {
-    width: 58px;
-    height: 58px;
-    margin: 0 auto .2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1.5px solid #111827;
-    border-radius: 6px;
+  /*
+   * The sheet mirrors create_pdf.php in PDF points: A4 page, margins 40/20/30pt,
+   * 2.835pt cell padding, line height = font size x 1.25, and the same minimum
+   * cell heights and spacing. Elements marked .pb are the blocks TCPDF moves to
+   * the next page as a whole; the script inserts the page breaks between them.
+   */
+  .sheet-stack {
+    --c: 10pt;
+    --sp: 10pt;
+    --pad: 2.835pt;
+    --space-section: calc(var(--sp) * .5);
+    --space-title: calc(var(--sp) * .4);
+    --space-content: calc(var(--sp) * .3);
+    --space-list: calc(var(--sp) * .1);
+    --sheet-font: 'Times New Roman', Times, 'Liberation Serif', serif;
+    position: relative;
+    width: 595.28pt;
+    min-height: 841.89pt;
+    margin: 0 auto;
+    color: #000;
+  }
+
+  .sheet-stack[data-font="helvetica"] {
+    --sheet-font: Helvetica, Arial, 'Liberation Sans', sans-serif;
+  }
+
+  .sheet-page {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 841.89pt;
     background: #fff;
-    color: #111827;
-    font-size: 2.3rem;
-    line-height: 1;
+    box-shadow: 0 0 14px rgba(0, 0, 0, .13);
   }
 
-  .resume-branding-qr-label {
-    display: block;
-    color: #111827;
-    font-size: .62rem;
-    font-weight: 600;
-    line-height: 1.1;
+  .sheet-page-label {
+    position: absolute;
+    top: 5px;
+    right: 8px;
+    color: #adb5bd;
+    font: 600 11px/1 system-ui, sans-serif;
   }
 
-  .photo-wrapper {
-    flex: 0 0 auto;
-    transition: opacity .2s ease;
+  .sheet-page.is-extra .sheet-page-label {
+    color: #b45309;
   }
 
-  .photo-wrapper.is-muted {
-    opacity: .22;
+  .sheet-content {
+    position: relative;
+    z-index: 1;
+    padding: 20pt 30pt 0 40pt;
+    font-family: var(--sheet-font);
+    font-size: var(--c);
+    line-height: 1.25;
   }
 
-  #photoInput {
+  .sheet-section,
+  .sheet-entry,
+  .sheet-list {
+    display: flow-root;
+  }
+
+  .sheet-section {
+    position: relative;
+    margin-bottom: var(--space-section);
+  }
+
+  .sheet-section.is-empty {
     display: none;
   }
 
-  .photo-preview,
-  .photo-placeholder {
-    width: 110px;
-    height: 130px;
-    border-radius: 6px;
-    cursor: pointer;
+  .sheet-entry {
+    position: relative;
+    margin-bottom: var(--space-content);
   }
 
-  .photo-preview {
-    display: block;
-    object-fit: cover;
-    border: 2px solid #cfcfcf;
-  }
-
-  .photo-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    border: 2px dashed #a9a9a9;
-    color: #888;
-    font-size: 12px;
+  /* Header */
+  .sheet-header {
+    position: relative;
     text-align: center;
   }
 
-  .photo-placeholder svg {
-    opacity: .55;
-  }
-
-  .resume-section {
-    margin-top: calc(var(--resume-gap) * 1.4);
-  }
-
-  .section-heading {
+  .sheet-header.has-photo {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: calc(var(--resume-gap) * .45);
-    padding-bottom: .15rem;
-    border-bottom: 1px solid #111;
-    font-size: var(--resume-font-section);
-    font-weight: 700;
+    min-height: 83pt;
+    text-align: left;
   }
 
-  .resume-entry {
-    margin-bottom: var(--resume-gap);
+  .sheet-photo {
+    display: none;
+    flex: 0 0 auto;
+    width: 66pt;
+    height: 78pt;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
   }
 
-  .entry-line {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: flex-start;
+  .has-photo .sheet-photo {
+    display: block;
   }
 
-  .entry-title {
+  .sheet-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    outline: .75pt solid #cfcfcf;
+    outline-offset: -.375pt;
+  }
+
+  .sheet-photo-add {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 4px);
+    display: none;
+    padding: 2px 6px;
+    border: 1px dashed #adb5bd;
+    border-radius: 6px;
+    background: #fff;
+    color: #6c757d;
+    font: 600 11px/1.4 system-ui, sans-serif;
+    white-space: nowrap;
+  }
+
+  .sheet-header.can-add-photo:hover .sheet-photo-add,
+  .sheet-header.can-add-photo:focus-within .sheet-photo-add {
+    display: block;
+  }
+
+  .sheet-header-text {
     flex: 1;
-    display: flex;
     min-width: 0;
   }
 
-  .entry-title .editable-input,
-  .entry-date .editable-input,
-  .editable-input.fw-bold {
-    font-size: var(--resume-font-title);
+  .has-photo .sheet-header-text {
+    margin-left: 12pt;
+    padding-top: max(0pt, calc((78pt - var(--c) * 3.125 - var(--c) - 4pt) / 2));
+  }
+
+  .sheet-name {
+    padding: 0 var(--pad);
+    font-size: calc(var(--c) * 2.5);
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .sheet-contact {
+    height: calc(var(--c) + 4pt);
+    padding: 0 var(--pad);
+    line-height: calc(var(--c) + 4pt);
+    white-space: nowrap;
+  }
+
+  .sheet-link {
+    color: #00f;
+    text-decoration: none;
+  }
+
+  /* Text blocks (TCPDF MultiCell: min height, top aligned, wraps inside the cell padding) */
+  .sheet-text {
+    min-height: 15pt;
+    padding: 0 var(--pad);
+    overflow-wrap: anywhere;
+  }
+
+  .sheet-text[data-multiline] {
+    white-space: pre-wrap;
+  }
+
+  .sheet-bio {
+    margin-top: 10pt;
+  }
+
+  .sheet-indented {
+    width: 446.46pt;
+    min-height: 20pt;
+    margin-left: 10pt;
+  }
+
+  .edu-desc {
+    margin-top: 1pt;
+  }
+
+  .hide-edu-desc .edu-desc {
+    display: none;
+  }
+
+  /* Project descriptions go through writeHTML: no padding, no minimum height, newlines collapse */
+  .sheet-html {
+    min-height: calc(var(--c) * 1.25);
+    overflow-wrap: anywhere;
+  }
+
+  .sheet-project-title {
+    font-size: calc(var(--c) * 1.1);
     font-weight: 700;
   }
 
-  .entry-date {
-    flex: 0 0 25%;
-    text-align: right;
-  }
-
-  .two-column-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 1.5rem;
-    row-gap: .15rem;
-  }
-
-  .language-list {
-    display: grid;
-    grid-template-columns: minmax(160px, 260px);
-    gap: .15rem;
-  }
-
-  .language-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: .5rem;
-  }
-
-  .editable-input,
-  .editable-textarea {
-    width: 100%;
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-bottom: 1px dashed transparent;
-    background: transparent;
-    color: inherit;
-    line-height: 1.25;
-    cursor: text;
-    transition: border-color .15s ease, background .15s ease;
-  }
-
-  .editable-textarea {
-    overflow: hidden;
-    resize: none;
+  /* Section heading: Cell(0, 20) plus a 1pt rule */
+  .sheet-heading {
+    position: relative;
+    height: 20pt;
+    margin: 0 0 var(--space-title);
+    padding: 0 var(--pad);
     font-family: inherit;
-    font-size: var(--resume-font-base);
+    font-size: calc(var(--c) * 1.3);
+    font-weight: 700;
+    line-height: 20pt;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
 
-  .editable-input:hover,
-  .editable-textarea:hover {
-    border-bottom-color: #b7b7b7;
+  .sheet-heading::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -.5pt;
+    height: 1pt;
+    background: #000;
   }
 
-  .editable-input:focus,
-  .editable-textarea:focus {
+  /* Title row: MultiCell(3/4 page) + right-aligned date cell */
+  .sheet-row {
+    display: flex;
+    align-items: flex-start;
+    min-height: max(15pt, calc(var(--c) * 1.375));
+    font-size: calc(var(--c) * 1.1);
+    font-weight: 700;
+  }
+
+  .sheet-experience .sheet-row {
+    margin-bottom: var(--space-list);
+  }
+
+  .sheet-row-title {
+    flex: 0 0 446.46pt;
+    width: 446.46pt;
+    padding: 0 var(--pad);
+    overflow-wrap: anywhere;
+  }
+
+  .sheet-row-date {
+    flex: 1;
+    min-width: 0;
+    padding: 0 var(--pad);
+    line-height: max(15pt, calc(var(--c) * 1.375));
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Two-column bullet lists: Cell(pageWidth / 2, 15) */
+  .sheet-grid-row {
+    display: grid;
+    grid-template-columns: 297.64pt minmax(0, 1fr);
+    height: 15pt;
+    line-height: 15pt;
+  }
+
+  .sheet-grid-item {
+    position: relative;
+    padding: 0 var(--pad);
+    white-space: nowrap;
+  }
+
+  /* Editable text */
+  .ed {
+    border-radius: 2px;
     outline: none;
-    border-bottom-color: #777;
-    background: rgba(13, 110, 253, .035);
+    transition: background-color .15s ease;
   }
 
-  .text-end { text-align: right; }
-  .text-start { text-align: left; }
-  .text-center { text-align: center; }
-  .fw-bold { font-weight: 700; }
+  .ed:hover {
+    background: rgba(37, 99, 235, .06);
+  }
+
+  .ed:focus {
+    background: rgba(37, 99, 235, .1);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, .35);
+  }
+
+  .ed:empty::before {
+    content: attr(data-placeholder);
+    color: #adb5bd;
+    text-transform: none;
+  }
+
+  /* Hover tools: they float in the page margin so they never change the layout */
+  .entry-tools {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 3px);
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s ease;
+  }
+
+  .sheet-entry:hover > .entry-tools,
+  .sheet-entry:focus-within > .entry-tools {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .entry-tools button,
+  .item-remove {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #fff;
+    color: #495057;
+    font: 600 12px/1 system-ui, sans-serif;
+    cursor: pointer;
+  }
+
+  .entry-tools button:hover,
+  .item-remove:hover {
+    border-color: #adb5bd;
+    color: #000;
+  }
+
+  .entry-tools button[data-action="remove"]:hover,
+  .item-remove:hover {
+    border-color: #fca5a5;
+    color: #b91c1c;
+  }
+
+  .item-remove {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translate(calc(-100% - 2px), -50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sheet-grid-item:hover .item-remove,
+  .sheet-grid-item:focus-within .item-remove {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sheet-add {
+    position: absolute;
+    top: 50%;
+    right: var(--pad);
+    padding: 1px 7px;
+    transform: translateY(-50%);
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font: 600 11px/1.4 system-ui, sans-serif;
+    text-transform: none;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity .15s ease;
+  }
+
+  .sheet-section:hover .sheet-add,
+  .sheet-section:focus-within .sheet-add {
+    opacity: 1;
+  }
+
+  /* QRsume branding, drawn on the last page exactly where the PDF puts it */
+  .sheet-branding {
+    position: absolute;
+    left: 0;
+    z-index: 2;
+    width: 100%;
+    height: 841.89pt;
+    pointer-events: none;
+    font-family: Helvetica, Arial, sans-serif;
+  }
+
+  .sheet-qr {
+    position: absolute;
+    top: 771.89pt;
+    left: 520.28pt;
+    width: 60pt;
+    height: 60pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #111;
+    font-size: 54pt;
+    line-height: 1;
+  }
+
+  .sheet-qr-label,
+  .sheet-bottom-link {
+    position: absolute;
+    top: 828pt;
+    font-size: 8pt;
+    line-height: 1;
+    white-space: nowrap;
+    transform: translateX(-50%);
+  }
+
+  .sheet-qr-label {
+    left: 540.28pt;
+  }
+
+  .sheet-bottom-link {
+    left: 50%;
+    color: #00f;
+    text-decoration: underline;
+  }
+
+  .pb-spacer {
+    pointer-events: none;
+  }
+
+  /* Parts that only show while editing and are not printed */
+  .is-ghost {
+    color: #adb5bd;
+  }
+
+  .sheet-grid-item:not(:hover):not(:focus-within) .is-ghost,
+  .sheet-grid-item:not(:hover):not(:focus-within) .is-ghost-field {
+    display: none;
+  }
+
+  .sidebar-add {
+    flex: 0 0 auto;
+    margin-left: auto;
+    margin-right: .4rem;
+    padding: .05rem .45rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: .72rem;
+    font-weight: 700;
+  }
 
   .is-hidden-in-preview {
     display: none !important;
@@ -755,7 +1079,11 @@ $profileText = 'qrsume.com/' . $username;
     nav,
     footer,
     .builder-sidebar,
-    .preview-topbar {
+    .preview-topbar,
+    .entry-tools,
+    .item-remove,
+    .sheet-add,
+    .sheet-page-label {
       display: none !important;
     }
 
@@ -768,12 +1096,7 @@ $profileText = 'qrsume.com/' . $username;
       overflow: visible;
     }
 
-    .resume-container {
-      width: auto;
-      min-height: auto;
-      margin: 0;
-      padding: 0;
-      padding-bottom: 5rem;
+    .sheet-page {
       box-shadow: none;
     }
   }
@@ -847,7 +1170,7 @@ $profileText = 'qrsume.com/' . $username;
           <input type="checkbox" name="show_photo" id="togglePhoto" checked>
           <label for="togglePhoto">
             Profile photo
-            <small>Keep the photo in the PDF. Click the photo area to upload a new one.</small>
+            <small>Keep the photo in the PDF. Click the photo on the page to upload a new one.</small>
           </label>
         </div>
         <div class="control-check">
@@ -944,6 +1267,7 @@ $profileText = 'qrsume.com/' . $username;
               <input type="checkbox" name="show_education" id="showEducation" data-preview-section="educationSection" checked>
               <span>Education</span>
             </label>
+            <button type="button" class="sidebar-add" data-add="education" hidden>+ Add</button>
             <span class="section-order-handle" title="Drag to reorder">☰</span>
           </div>
 
@@ -952,6 +1276,7 @@ $profileText = 'qrsume.com/' . $username;
               <input type="checkbox" name="show_experience" id="showExperience" data-preview-section="experienceSection" checked>
               <span>Work experience</span>
             </label>
+            <button type="button" class="sidebar-add" data-add="experience" hidden>+ Add</button>
             <span class="section-order-handle" title="Drag to reorder">☰</span>
           </div>
 
@@ -960,6 +1285,7 @@ $profileText = 'qrsume.com/' . $username;
               <input type="checkbox" name="show_skills" id="showSkills" data-preview-section="skillsSection" checked>
               <span>Skills</span>
             </label>
+            <button type="button" class="sidebar-add" data-add="skills" hidden>+ Add</button>
             <span class="section-order-handle" title="Drag to reorder">☰</span>
           </div>
 
@@ -968,6 +1294,7 @@ $profileText = 'qrsume.com/' . $username;
               <input type="checkbox" name="show_languages" id="showLanguages" data-preview-section="languagesSection" checked>
               <span>Languages</span>
             </label>
+            <button type="button" class="sidebar-add" data-add="languages" hidden>+ Add</button>
             <span class="section-order-handle" title="Drag to reorder">☰</span>
           </div>
 
@@ -976,6 +1303,7 @@ $profileText = 'qrsume.com/' . $username;
               <input type="checkbox" name="show_projects" id="showProjects" data-preview-section="projectsSection" checked>
               <span>Projects</span>
             </label>
+            <button type="button" class="sidebar-add" data-add="projects" hidden>+ Add</button>
             <span class="section-order-handle" title="Drag to reorder">☰</span>
           </div>
 
@@ -1018,443 +1346,363 @@ $profileText = 'qrsume.com/' . $username;
             Download LaTeX (.tex)
           </button>
         </div>
-        <p class="sidebar-note">The preview is editable. Final PDF spacing may adjust slightly for print formatting.</p>
+        <p class="sidebar-note">Page breaks in the preview follow the PDF layout, and the page count is checked against the real PDF.</p>
       </section>
     </aside>
 
     <section class="builder-preview-area" aria-label="Editable resume preview">
       <div class="preview-topbar">
-        <span><strong>Live preview</strong> — click any text field to edit it.</span>
-        <span>A4 page</span>
+        <span><strong>Live preview</strong> — click any text to edit it. Hover an entry to move or remove it.</span>
+        <span class="page-badge" id="pageBadge" role="status">1 page</span>
       </div>
 
-      <article class="resume-container" id="resumePreview" aria-label="Resume preview">
-        <header class="resume-header">
-          <div class="photo-wrapper" id="photoWrapper">
-            <input type="file" id="photoInput" name="photo_upload" accept="image/*">
+      <div class="sheet-stack" id="sheetStack" data-font="times">
+        <div class="sheet-pages" id="sheetPages" aria-hidden="true"></div>
+
+        <article class="sheet-content" id="resumePreview" aria-label="Resume preview">
+          <header class="pb sheet-header" id="sheetHeader">
+            <input type="file" id="photoInput" name="photo_upload" accept="image/*" hidden>
             <input type="hidden" name="existing_photo_url" value="<?= $photoUrl ?>">
+            <button type="button" class="sheet-photo" id="photoButton" title="Click to change photo">
+              <img id="photoPreview" src="<?= $photoUrl ?>" alt="Profile photo" <?= $photoUrl ? '' : 'hidden' ?>>
+            </button>
+            <button type="button" class="sheet-photo-add" id="photoAddButton">+ Photo</button>
 
-            <img
-              id="photoPreview"
-              class="photo-preview"
-              src="<?= $photoUrl ?>"
-              alt="Profile photo"
-              title="Click to change photo"
-              <?= $photoUrl ? '' : 'style="display:none;"' ?>
-            >
-
-            <div
-              id="photoPlaceholder"
-              class="photo-placeholder"
-              title="Click to add photo"
-              <?= $photoUrl ? 'style="display:none;"' : '' ?>
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
-                <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
-              </svg>
-              <span>Click to add<br>photo</span>
-            </div>
-          </div>
-
-          <div class="resume-header__main">
-            <div class="name-row">
-              <input class="editable-input text-end" type="text" name="personal_name" value="<?= e($personal['personal_name'] ?? '') ?>" placeholder="Name">
-              <input class="editable-input text-start" type="text" name="personal_lastname" value="<?= e($personal['personal_lastname'] ?? '') ?>" placeholder="Last name">
-            </div>
-
-            <div class="contact-row">
-              <input
-                class="editable-input text-end"
-                type="text"
-                name="email"
-                value="<?= e($contact['email'] ?? $account['email'] ?? '') ?>"
-                placeholder="Email"
-              >
-
-              <span aria-hidden="true">|</span>
-
-              <input
-                class="editable-input text-start text-center"
-                type="text"
-                name="phone_number"
-                value="<?= e($contact['phone_number'] ?? '') ?>"
-                placeholder="Phone number"
-              >
-
-              <span class="qrsume-branding-preview-item" id="qrsumePreviewSeparator" aria-hidden="true">|</span>
-
-              <a
-                id="qrsumePreviewLink"
-                class="qrsume-preview-link qrsume-branding-preview-item"
-                href="<?= e($profileUrl) ?>"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <?= e($profileText) ?>
-              </a>
-            </div>
-          </div>
-        </header>
-
-        <section class="resume-section" id="bioSection">
-          <textarea class="editable-textarea" name="personal_bio" rows="4" placeholder="Write a short professional bio..."><?= e($personal['personal_bio'] ?? '') ?></textarea>
-        </section>
-
-        <section class="resume-section" id="educationSection" data-resume-section="education">
-          <div class="section-heading">
-            <span data-section-title="education"><?= e($sectionTitles[$resumeLanguage]['education']) ?></span>
-          </div>
-
-          <?php foreach ($education as $index => $edu): ?>
-            <div class="resume-entry">
-              <div class="entry-line">
-                <div class="entry-title">
-                  <input class="editable-input fw-bold" type="text" name="education[<?= $index ?>][name_of_studies]" value="<?= e($edu['name_of_studies'] ?? '') ?>" placeholder="Degree / studies">
-                </div>
-                <div class="entry-date">
-                  <input class="editable-input fw-bold text-end" type="text" name="education[<?= $index ?>][date]" value="<?= e($edu['date'] ?? '') ?>" placeholder="Date">
-                </div>
+            <div class="sheet-header-text">
+              <div class="sheet-name">
+                <?= editable('personal_name', $personal['personal_name'] ?? '', 'Name') ?>
+                <?= editable('personal_lastname', $personal['personal_lastname'] ?? '', 'Last name') ?>
               </div>
-              <input class="editable-input" type="text" name="education[<?= $index ?>][place_of_study]" value="<?= e($edu['place_of_study'] ?? '') ?>" placeholder="Institution">
-              <textarea class="editable-textarea education-description" name="education[<?= $index ?>][desc]" rows="2" placeholder="Education description"><?= e($edu['brief_description'] ?? '') ?></textarea>
+              <div class="sheet-contact"><?= editable('email', $contact['email'] ?? $account['email'] ?? '', 'Email') ?><span id="contactSeparator"> | </span><?= editable('phone_number', $contact['phone_number'] ?? '', 'Phone number') ?><span id="linkSeparator" class="qrsume-branding-preview-item"> | </span><a id="qrsumePreviewLink" class="sheet-link qrsume-branding-preview-item" href="<?= e($profileUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($profileText) ?></a></div>
             </div>
-          <?php endforeach; ?>
-        </section>
+          </header>
 
-        <section class="resume-section" id="experienceSection" data-resume-section="experience">
-          <div class="section-heading">
-            <span data-section-title="experience"><?= e($sectionTitles[$resumeLanguage]['experience']) ?></span>
-          </div>
+          <section class="sheet-section sheet-bio" id="bioSection">
+            <?= editable('personal_bio', $personal['personal_bio'] ?? '', 'Write a short professional bio...', 'pb sheet-text', 'div', true) ?>
+          </section>
 
-          <?php foreach ($experience as $index => $exp): ?>
-            <div class="resume-entry">
-              <div class="entry-line">
-                <div class="entry-title">
-                  <input class="editable-input fw-bold" type="text" name="experience[<?= $index ?>][job_name]" value="<?= e($exp['job_name'] ?? '') ?>" placeholder="Job title">
-                  <input class="editable-input fw-bold" type="text" name="experience[<?= $index ?>][place_of_work]" value="<?= e($exp['place_of_work'] ?? '') ?>" placeholder="Company">
-                </div>
-                <div class="entry-date">
-                  <input class="editable-input fw-bold text-end" type="text" name="experience[<?= $index ?>][date]" value="<?= e($exp['date'] ?? '') ?>" placeholder="Date">
-                </div>
-              </div>
-              <textarea class="editable-textarea" name="experience[<?= $index ?>][brief_description]" rows="3" placeholder="Describe your responsibilities and achievements..."><?= e($exp['brief_description'] ?? '') ?></textarea>
+          <section class="sheet-section" id="educationSection" data-resume-section="education">
+            <?= sectionHeading('education', $sectionTitles[$resumeLanguage]['education'], 'education') ?>
+            <div class="sheet-list" data-list="education" data-next-index="<?= count($education) ?>">
+              <?php foreach ($education as $index => $edu): ?>
+                <?= renderEducationEntry((string) $index, $edu) ?>
+              <?php endforeach; ?>
             </div>
-          <?php endforeach; ?>
-        </section>
+          </section>
 
-        <section class="resume-section" id="skillsSection" data-resume-section="skills">
-          <div class="section-heading">
-            <span data-section-title="skills"><?= e($sectionTitles[$resumeLanguage]['skills']) ?></span>
-          </div>
-
-          <div class="two-column-list">
-            <?php foreach ($skills as $index => $skill): ?>
-              <input class="editable-input" type="text" name="skills[<?= $index ?>][aptitude]" value="<?= e($skill['aptitude'] ?? '') ?>" placeholder="Skill">
-            <?php endforeach; ?>
-          </div>
-        </section>
-
-        <section class="resume-section" id="languagesSection" data-resume-section="languages">
-          <div class="section-heading">
-            <span data-section-title="languages"><?= e($sectionTitles[$resumeLanguage]['languages']) ?></span>
-          </div>
-
-          <div class="language-list">
-            <?php foreach ($languages as $index => $lang): ?>
-              <div class="language-row">
-                <input class="editable-input" type="text" name="languages[<?= $index ?>][language]" value="<?= e($lang['language'] ?? '') ?>" placeholder="Language">
-                <input class="editable-input" type="text" name="languages[<?= $index ?>][level]" value="<?= e($lang['level'] ?? '') ?>" placeholder="Level">
-              </div>
-            <?php endforeach; ?>
-          </div>
-        </section>
-
-        <section class="resume-section" id="projectsSection" data-resume-section="projects">
-          <div class="section-heading">
-            <span data-section-title="projects"><?= e($sectionTitles[$resumeLanguage]['projects']) ?></span>
-          </div>
-
-          <?php foreach ($projects as $index => $project): ?>
-            <div class="resume-entry">
-              <input class="editable-input fw-bold" type="text" name="projects[<?= $index ?>][interest]" value="<?= e($project['interest'] ?? '') ?>" placeholder="Project title">
-              <textarea class="editable-textarea" name="projects[<?= $index ?>][description]" rows="2" placeholder="Project description"><?= e($project['description'] ?? '') ?></textarea>
+          <section class="sheet-section sheet-experience" id="experienceSection" data-resume-section="experience">
+            <?= sectionHeading('experience', $sectionTitles[$resumeLanguage]['experience'], 'experience') ?>
+            <div class="sheet-list" data-list="experience" data-next-index="<?= count($experience) ?>">
+              <?php foreach ($experience as $index => $exp): ?>
+                <?= renderExperienceEntry((string) $index, $exp) ?>
+              <?php endforeach; ?>
             </div>
-          <?php endforeach; ?>
-        </section>
+          </section>
 
-        <?php if (!empty($customSections)): ?>
+          <section class="sheet-section" id="skillsSection" data-resume-section="skills">
+            <?= sectionHeading('skills', $sectionTitles[$resumeLanguage]['skills'], 'skills') ?>
+            <div class="sheet-list sheet-grid" data-list="skills" data-next-index="<?= count($skills) ?>">
+              <?= renderGridRows(array_map(fn($index, $skill) => renderSkillItem((string) $index, $skill), array_keys($skills), $skills)) ?>
+            </div>
+          </section>
+
+          <section class="sheet-section" id="languagesSection" data-resume-section="languages">
+            <?= sectionHeading('languages', $sectionTitles[$resumeLanguage]['languages'], 'languages') ?>
+            <div class="sheet-list sheet-grid" data-list="languages" data-next-index="<?= count($languages) ?>">
+              <?= renderGridRows(array_map(fn($index, $lang) => renderLanguageItem((string) $index, $lang), array_keys($languages), $languages)) ?>
+            </div>
+          </section>
+
+          <section class="sheet-section" id="projectsSection" data-resume-section="projects">
+            <?= sectionHeading('projects', $sectionTitles[$resumeLanguage]['projects'], 'projects') ?>
+            <div class="sheet-list" data-list="projects" data-next-index="<?= count($projects) ?>">
+              <?php foreach ($projects as $index => $project): ?>
+                <?= renderProjectEntry((string) $index, $project) ?>
+              <?php endforeach; ?>
+            </div>
+          </section>
+
           <?php foreach ($customSections as $index => $section): ?>
-            <?php $customSectionId = 'customSection' . $index; ?>
-            <section class="resume-section" id="<?= e($customSectionId) ?>" data-resume-section="custom_<?= $index ?>">
-              <div class="section-heading">
-                <span><?= e($section['section_title'] ?: 'Untitled Section') ?></span>
-              </div>
-
-              <input type="hidden" name="custom_sections[<?= $index ?>][section_title]" value="<?= e($section['section_title'] ?? '') ?>">
-              <textarea class="editable-textarea" name="custom_sections[<?= $index ?>][section_content]" rows="3" placeholder="Section content"><?= e($section['section_content'] ?? '') ?></textarea>
+            <section class="sheet-section" id="customSection<?= $index ?>" data-resume-section="custom_<?= $index ?>">
+              <h2 class="pb sheet-heading"><?= editable("custom_sections[$index][section_title]", $section['section_title'] ?? '', 'Section title', 'sheet-custom-title', 'span', false, 'data-custom-index="' . $index . '"') ?></h2>
+              <?= editable("custom_sections[$index][section_content]", $section['section_content'] ?? '', 'Section content', 'pb sheet-text', 'div', true) ?>
             </section>
           <?php endforeach; ?>
-        <?php endif; ?>
+        </article>
 
-        <div class="resume-branding-bottom-link qrsume-branding-preview-item" id="qrsumeBottomLinkWrapper">
-          <a
-            id="qrsumeBottomLink"
-            class="qrsume-bottom-link"
-            href="<?= e($profileUrl) ?>"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Created with QRsume - <?= e($profileText) ?>
-          </a>
+        <div class="sheet-branding qrsume-branding-preview-item" id="sheetBranding" aria-hidden="true">
+          <div class="sheet-qr"><i class="bi bi-qr-code"></i></div>
+          <span class="sheet-qr-label" data-section-title="full_profile"><?= e($sectionTitles[$resumeLanguage]['full_profile']) ?></span>
+          <span class="sheet-bottom-link"><?= e($profileText) ?></span>
         </div>
-
-        <div class="resume-branding-qr qrsume-branding-preview-item" id="qrsumePreviewQr">
-          <div class="resume-branding-qr-box">
-            <i class="bi bi-qr-code"></i>
-          </div>
-          <span class="resume-branding-qr-label" data-section-title="full_profile"><?= e($sectionTitles[$resumeLanguage]['full_profile']) ?></span>
-        </div>
-      </article>
+      </div>
     </section>
   </main>
+
+  <div id="editableSync" hidden></div>
 </form>
+
+<template id="tpl-education"><?= renderEducationEntry('__I__', []) ?></template>
+<template id="tpl-experience"><?= renderExperienceEntry('__I__', []) ?></template>
+<template id="tpl-skills"><?= renderSkillItem('__I__', []) ?></template>
+<template id="tpl-languages"><?= renderLanguageItem('__I__', []) ?></template>
+<template id="tpl-projects"><?= renderProjectEntry('__I__', []) ?></template>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // PDF geometry (create_pdf.php), converted to CSS px
+  const PT = 4 / 3;
+  const PAGE_HEIGHT = 841.89 * PT;
+  const PAGE_TOP = 20 * PT;                // top margin
+  const PAGE_BREAK_AT = (841.89 - 15) * PT; // SetAutoPageBreak(true, 15)
+  const PAGE_GAP = 24;
+  const PAGE_STRIDE = PAGE_HEIGHT + PAGE_GAP;
+
+  const form = document.getElementById('resumeForm');
+  const stack = document.getElementById('sheetStack');
+  const pagesLayer = document.getElementById('sheetPages');
   const resumePreview = document.getElementById('resumePreview');
+  const sheetHeader = document.getElementById('sheetHeader');
+  const sheetBranding = document.getElementById('sheetBranding');
+  const pageBadge = document.getElementById('pageBadge');
+  const editableSync = document.getElementById('editableSync');
+  const languageSelector = document.getElementById('resumeLanguage');
   const fontSelector = document.getElementById('font');
   const fontSizeSelector = document.getElementById('contentFontSize');
   const spacingSelector = document.getElementById('spaceSize');
-  const languageSelector = document.getElementById('resumeLanguage');
-  const sectionTitles = <?= json_encode($sectionTitles, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
-  const photoInput = document.getElementById('photoInput');
-  const photoPreview = document.getElementById('photoPreview');
-  const photoPlaceholder = document.getElementById('photoPlaceholder');
-  const photoWrapper = document.getElementById('photoWrapper');
   const togglePhoto = document.getElementById('togglePhoto');
   const toggleBio = document.getElementById('toggleBio');
   const toggleQr = document.getElementById('toggleQr');
   const toggleEducationDescription = document.getElementById('showEducationDescription');
+  const photoInput = document.getElementById('photoInput');
+  const photoPreview = document.getElementById('photoPreview');
   const sectionOrderList = document.getElementById('sectionOrderList');
   const sectionOrderInput = document.getElementById('sectionOrderInput');
-  const qrsumeBrandingPreviewItems = document.querySelectorAll('.qrsume-branding-preview-item');
+  const contactSeparator = document.getElementById('contactSeparator');
+  const linkSeparator = document.getElementById('linkSeparator');
+  const sectionTitles = <?= json_encode($sectionTitles, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
-  const fontFamilies = {
-    times: "'Times New Roman', Times, serif",
-    helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif"
-  };
+  let hasPhoto = photoPreview.getAttribute('src') !== '';
+  let pendingPhoto = false;
 
-  const resumeHeader = document.querySelector('.resume-header');
-  const headerInputs = resumeHeader.querySelectorAll('.name-row .editable-input, .contact-row .editable-input');
-  const measureContext = document.createElement('canvas').getContext('2d');
+  // ---------------------------------------------------------------------------
+  // Editable text
+  // ---------------------------------------------------------------------------
 
-  function fitInputWidth(input) {
-    const style = getComputedStyle(input);
-    measureContext.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    input.style.width = `${Math.ceil(measureContext.measureText(input.value || input.placeholder).width) + 4}px`;
+  const supportsPlaintextOnly = (() => {
+    const probe = document.createElement('div');
+    probe.contentEditable = 'plaintext-only';
+    return probe.contentEditable === 'plaintext-only';
+  })();
+
+  function setupEditables(root) {
+    if (supportsPlaintextOnly) return;
+    root.querySelectorAll('.ed').forEach(element => {
+      element.contentEditable = 'true';
+    });
+  }
+
+  function fieldValue(element) {
+    // innerText keeps the line breaks of multi-line fields; headings use textContent to skip text-transform
+    return element.hasAttribute('data-multiline')
+      ? element.innerText.replace(/ /g, ' ').replace(/\s+$/, '')
+      : element.textContent.replace(/ /g, ' ').trim();
+  }
+
+  function fieldByName(name) {
+    return resumePreview.querySelector(`.ed[data-name="${CSS.escape(name)}"]`);
+  }
+
+  // Copy every editable field into hidden inputs so the normal form post carries them
+  function syncEditableFields() {
+    editableSync.replaceChildren();
+    resumePreview.querySelectorAll('.ed[data-name]').forEach(element => {
+      if (element.classList.contains('sheet-heading-text') && element.dataset.custom !== '1') return;
+
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = element.dataset.name;
+      input.value = fieldValue(element);
+      editableSync.append(input);
+    });
+  }
+
+  resumePreview.addEventListener('keydown', event => {
+    const field = event.target.closest('.ed');
+    if (field && event.key === 'Enter' && !field.hasAttribute('data-multiline')) {
+      event.preventDefault();
+      field.blur();
+    }
+  });
+
+  resumePreview.addEventListener('paste', event => {
+    const field = event.target.closest('.ed');
+    if (!field) return;
+
+    event.preventDefault();
+    let text = event.clipboardData.getData('text/plain');
+    if (!field.hasAttribute('data-multiline')) {
+      text = text.replace(/\s*[\r\n]+\s*/g, ' ');
+    }
+    document.execCommand('insertText', false, text);
+  });
+
+  resumePreview.addEventListener('input', event => {
+    const field = event.target.closest('.ed');
+    if (!field) return;
+
+    // Leave the field truly empty so its placeholder shows again
+    if (field.textContent === '' && field.innerHTML !== '') {
+      field.innerHTML = '';
+    }
+
+    if (field.classList.contains('sheet-heading-text')) {
+      field.dataset.custom = '1';
+    }
+
+    if (field.dataset.customIndex !== undefined) {
+      const label = document.querySelector(`[data-section="custom_${field.dataset.customIndex}"] .section-order-label span`);
+      if (label) label.textContent = fieldValue(field) || 'Untitled Section';
+    }
+
+    contentChanged();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Entries: add, remove, move
+  // ---------------------------------------------------------------------------
+
+  function regroupGrid(list) {
+    const items = [...list.querySelectorAll('.sheet-grid-item')];
+    list.replaceChildren();
+    for (let i = 0; i < items.length; i += 2) {
+      const row = document.createElement('div');
+      row.className = 'pb sheet-grid-row';
+      row.append(...items.slice(i, i + 2));
+      list.append(row);
+    }
+  }
+
+  function addEntry(type) {
+    const list = resumePreview.querySelector(`[data-list="${type}"]`);
+    const template = document.getElementById(`tpl-${type}`);
+    if (!list || !template) return;
+
+    const index = Number(list.dataset.nextIndex || 0);
+    list.dataset.nextIndex = String(index + 1);
+
+    const holder = document.createElement('div');
+    holder.innerHTML = template.innerHTML.replaceAll('__I__', String(index)).trim();
+    const entry = holder.firstElementChild;
+    setupEditables(entry);
+    list.append(entry);
+
+    if (list.classList.contains('sheet-grid')) {
+      regroupGrid(list);
+    }
+
+    // Adding to a hidden section makes no sense: show it
+    const toggle = document.querySelector(`[data-section="${type}"] input[type="checkbox"]`);
+    if (toggle && !toggle.checked) {
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change'));
+    }
+
+    contentChanged();
+    entry.querySelector('.ed').focus();
+  }
+
+  function entrySiblings(entry) {
+    const list = entry.closest('.sheet-list');
+    return [...list.querySelectorAll('[data-entry]')];
+  }
+
+  resumePreview.addEventListener('click', event => {
+    const addButton = event.target.closest('[data-add]');
+    if (addButton) {
+      addEntry(addButton.dataset.add);
+      return;
+    }
+
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const entry = actionButton.closest('[data-entry]');
+    const list = entry.closest('.sheet-list');
+    const siblings = entrySiblings(entry);
+    const position = siblings.indexOf(entry);
+
+    if (actionButton.dataset.action === 'remove') {
+      entry.remove();
+    } else if (actionButton.dataset.action === 'up' && position > 0) {
+      siblings[position - 1].before(entry);
+    } else if (actionButton.dataset.action === 'down' && position < siblings.length - 1) {
+      siblings[position + 1].after(entry);
+    }
+
+    if (list.classList.contains('sheet-grid')) {
+      regroupGrid(list);
+    }
+
+    contentChanged();
+  });
+
+  document.querySelectorAll('.sidebar-add').forEach(button => {
+    button.addEventListener('click', () => addEntry(button.dataset.add));
+  });
+
+  // A section with no entries is not printed, so it is hidden here too (it can be re-added from the sidebar)
+  function updateEmptySections() {
+    resumePreview.querySelectorAll('[data-list]').forEach(list => {
+      const isEmpty = !list.querySelector('[data-entry]');
+      list.closest('.sheet-section').classList.toggle('is-empty', isEmpty);
+
+      const sidebarAdd = document.querySelector(`.sidebar-add[data-add="${list.dataset.list}"]`);
+      if (sidebarAdd) sidebarAdd.hidden = !isEmpty;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Header
+  // ---------------------------------------------------------------------------
+
+  function brandingIsShown() {
+    return !toggleQr || toggleQr.checked;
+  }
+
+  function updateSeparators() {
+    const email = fieldValue(fieldByName('email'));
+    const phone = fieldValue(fieldByName('phone_number'));
+    contactSeparator.hidden = !(email && phone);
+    linkSeparator.hidden = !(brandingIsShown() && (email || phone));
+
+    // An empty level shows as a placeholder while editing, without the brackets the PDF leaves out
+    resumePreview.querySelectorAll('.level-open').forEach(open => {
+      const level = open.nextElementSibling;
+      const isEmpty = fieldValue(level) === '';
+      open.classList.toggle('is-ghost', isEmpty);
+      open.parentElement.querySelector('.level-close').classList.toggle('is-ghost', isEmpty);
+      level.classList.toggle('is-ghost-field', isEmpty);
+    });
+
+    resumePreview.querySelectorAll('.job-sep').forEach(separator => {
+      const [job, company] = separator.parentElement.querySelectorAll('.ed');
+      separator.hidden = !(fieldValue(job) && fieldValue(company));
+    });
   }
 
   function updateHeaderLayout() {
-    const hasPhoto = togglePhoto.checked && photoPreview.style.display !== 'none';
-    resumeHeader.classList.toggle('has-photo', hasPhoto);
-    headerInputs.forEach(input => {
-      if (hasPhoto) {
-        fitInputWidth(input);
-      } else {
-        input.style.width = '';
-      }
-    });
+    const showPhoto = togglePhoto.checked && hasPhoto;
+    sheetHeader.classList.toggle('has-photo', showPhoto);
+    sheetHeader.classList.toggle('can-add-photo', togglePhoto.checked && !hasPhoto);
   }
 
-  function applyFont(fontKey) {
-    resumePreview.style.fontFamily = fontFamilies[fontKey] || fontFamilies.times;
-    updateHeaderLayout();
-  }
-
-  function applyFontSize(sizePt) {
-    const basePx = Number(sizePt) * 1.6;
-
-    resumePreview.style.setProperty('--resume-font-base', `${basePx}px`);
-    resumePreview.style.setProperty('--resume-font-title', `${basePx * 1.1}px`);
-    resumePreview.style.setProperty('--resume-font-section', `${basePx * 1.4}px`);
-    resumePreview.style.setProperty('--resume-font-name', `${basePx * 2.5}px`);
-
-    resizeAllTextareas();
-    updateHeaderLayout();
-  }
-
-  function applyLanguage(language) {
-    const titles = sectionTitles[language] || sectionTitles.en;
-    document.querySelectorAll('[data-section-title]').forEach(element => {
-      element.textContent = titles[element.dataset.sectionTitle] || element.textContent;
-    });
-  }
-
-  function applySpacing(value) {
-    resumePreview.style.setProperty('--resume-gap', `${Number(value)}px`);
-    resizeAllTextareas();
-  }
-
-  function setPreviewVisibility(sectionId, shouldShow) {
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-
-    section.classList.toggle('is-hidden-in-preview', !shouldShow);
-  }
-
-  function setQrsumeBrandingVisibility(shouldShow) {
-    qrsumeBrandingPreviewItems.forEach(item => {
-      item.classList.toggle('is-hidden-in-preview', !shouldShow);
-    });
-  }
-
-  function setEducationDescriptionVisibility(shouldShow) {
-    document.querySelectorAll('.education-description').forEach(description => {
-      description.classList.toggle('is-hidden-in-preview', !shouldShow);
-    });
-
-    resizeAllTextareas();
-  }
-
-  function resizeTextarea(textarea) {
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }
-
-  function resizeAllTextareas() {
-    document.querySelectorAll('.editable-textarea').forEach(resizeTextarea);
-  }
-
-  function triggerPhotoUpload() {
+  function choosePhoto() {
     photoInput.click();
   }
 
-  function getDragAfterElement(container, y) {
-    const draggableElements = [
-      ...container.querySelectorAll('.section-order-item:not(.dragging)')
-    ];
-
-    return draggableElements.reduce((closest, child) => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-
-      if (offset < 0 && offset > closest.offset) {
-        return { offset, element: child };
-      }
-
-      return closest;
-    }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
-  }
-
-  function getCurrentSectionOrder() {
-    if (!sectionOrderList) return [];
-
-    return [...sectionOrderList.querySelectorAll('.section-order-item')]
-      .map(item => item.dataset.section)
-      .filter(Boolean);
-  }
-
-  function updateSectionOrderInput() {
-    if (!sectionOrderInput) return;
-    sectionOrderInput.value = getCurrentSectionOrder().join(',');
-  }
-
-  function reorderPreviewSections() {
-    const order = getCurrentSectionOrder();
-
-    order.forEach(sectionKey => {
-      const section = resumePreview.querySelector(`[data-resume-section="${sectionKey}"]`);
-      if (section) {
-        resumePreview.appendChild(section);
-      }
-    });
-
-    const bottomLink = document.getElementById('qrsumeBottomLinkWrapper');
-    const qr = document.getElementById('qrsumePreviewQr');
-
-    if (bottomLink) resumePreview.appendChild(bottomLink);
-    if (qr) resumePreview.appendChild(qr);
-
-    resizeAllTextareas();
-  }
-
-  function syncSectionOrder() {
-    updateSectionOrderInput();
-    reorderPreviewSections();
-  }
-
-  function initializeSectionDragAndDrop() {
-    if (!sectionOrderList || !sectionOrderInput) return;
-
-    sectionOrderList.addEventListener('dragstart', event => {
-      const item = event.target.closest('.section-order-item');
-      if (!item) return;
-      item.classList.add('dragging');
-    });
-
-    sectionOrderList.addEventListener('dragend', event => {
-      const item = event.target.closest('.section-order-item');
-      if (!item) return;
-      item.classList.remove('dragging');
-      syncSectionOrder();
-    });
-
-    sectionOrderList.addEventListener('dragover', event => {
-      event.preventDefault();
-
-      const draggingItem = sectionOrderList.querySelector('.dragging');
-      if (!draggingItem) return;
-
-      const afterElement = getDragAfterElement(sectionOrderList, event.clientY);
-
-      if (afterElement === null) {
-        sectionOrderList.appendChild(draggingItem);
-      } else {
-        sectionOrderList.insertBefore(draggingItem, afterElement);
-      }
-    });
-
-    syncSectionOrder();
-  }
-
-  languageSelector.addEventListener('change', event => applyLanguage(event.target.value));
-  fontSelector.addEventListener('change', event => applyFont(event.target.value));
-  fontSizeSelector.addEventListener('change', event => applyFontSize(event.target.value));
-  spacingSelector.addEventListener('change', event => applySpacing(event.target.value));
-
-  toggleBio.addEventListener('change', event => {
-    setPreviewVisibility('bioSection', event.target.checked);
-  });
-
-  if (toggleQr) {
-    toggleQr.addEventListener('change', event => {
-      setQrsumeBrandingVisibility(event.target.checked);
-    });
-  }
-
-  togglePhoto.addEventListener('change', event => {
-    photoWrapper.classList.toggle('is-muted', !event.target.checked);
-    updateHeaderLayout();
-  });
-
-  toggleEducationDescription.addEventListener('change', event => {
-    setEducationDescriptionVisibility(event.target.checked);
-  });
-
-  document.querySelectorAll('[data-preview-section]').forEach(toggle => {
-    toggle.addEventListener('change', event => {
-      setPreviewVisibility(event.target.dataset.previewSection, event.target.checked);
-    });
-  });
-
-  document.querySelectorAll('.editable-textarea').forEach(textarea => {
-    textarea.addEventListener('input', () => resizeTextarea(textarea));
-    resizeTextarea(textarea);
-  });
-
-  photoPreview.addEventListener('click', triggerPhotoUpload);
-  photoPlaceholder.addEventListener('click', triggerPhotoUpload);
+  document.getElementById('photoButton').addEventListener('click', choosePhoto);
+  document.getElementById('photoAddButton').addEventListener('click', choosePhoto);
 
   photoInput.addEventListener('change', event => {
     const file = event.target.files && event.target.files[0];
@@ -1469,26 +1717,306 @@ document.addEventListener('DOMContentLoaded', () => {
     const reader = new FileReader();
     reader.onload = loadEvent => {
       photoPreview.src = loadEvent.target.result;
-      photoPreview.style.display = 'block';
-      photoPlaceholder.style.display = 'none';
+      photoPreview.hidden = false;
+      hasPhoto = true;
+      pendingPhoto = true;
       updateHeaderLayout();
+      contentChanged();
     };
     reader.readAsDataURL(file);
   });
 
-  headerInputs.forEach(input => input.addEventListener('input', updateHeaderLayout));
+  // ---------------------------------------------------------------------------
+  // Pages
+  // ---------------------------------------------------------------------------
 
-  initializeSectionDragAndDrop();
-  applyFont(fontSelector.value);
-  applyFontSize(fontSizeSelector.value);
-  applySpacing(spacingSelector.value);
-  setEducationDescriptionVisibility(toggleEducationDescription.checked);
+  let estimatedPages = 1;
+  let exactPages = null;
+  let layoutQueued = false;
+
+  // A short timer rather than requestAnimationFrame, which never fires in a background tab
+  function scheduleLayout() {
+    if (layoutQueued) return;
+    layoutQueued = true;
+    setTimeout(() => {
+      layoutQueued = false;
+      layoutPages();
+    }, 30);
+  }
+
+  // Lay the content out the way TCPDF does: a block that would cross the bottom margin
+  // (15pt) starts on the next page, below its 20pt top margin.
+  function layoutPages() {
+    resumePreview.querySelectorAll('.pb-spacer').forEach(spacer => spacer.remove());
+
+    // A wrapped title row is one date cell plus a fixed 15pt in the PDF, whatever the text height
+    resumePreview.querySelectorAll('.sheet-row').forEach(row => {
+      row.style.height = '';
+      const title = row.querySelector('.sheet-row-title');
+      if (!row.offsetParent || !title) return;
+
+      const lines = Math.round(title.offsetHeight / parseFloat(getComputedStyle(title).lineHeight));
+      if (lines > 1) {
+        row.style.height = `${parseFloat(getComputedStyle(row).minHeight) + 15 * PT}px`;
+      }
+    });
+
+    const origin = stack.getBoundingClientRect().top;
+    let contentBottom = 0;
+
+    resumePreview.querySelectorAll('.pb').forEach(block => {
+      if (!block.offsetParent) return;
+
+      const rect = block.getBoundingClientRect();
+      const top = rect.top - origin;
+      const pageTop = Math.max(0, Math.floor(top / PAGE_STRIDE)) * PAGE_STRIDE;
+
+      if (rect.bottom - origin > pageTop + PAGE_BREAK_AT + 0.5 && top > pageTop + PAGE_TOP + 0.5) {
+        const spacer = document.createElement('div');
+        spacer.className = 'pb-spacer';
+        spacer.style.height = `${pageTop + PAGE_STRIDE + PAGE_TOP - top}px`;
+        block.before(spacer);
+      }
+
+      contentBottom = Math.max(contentBottom, block.getBoundingClientRect().bottom - origin);
+    });
+
+    estimatedPages = Math.max(1, Math.floor((contentBottom - 0.5) / PAGE_STRIDE) + 1);
+    renderPages(estimatedPages);
+    updateBadge();
+  }
+
+  function renderPages(count) {
+    const pages = [];
+    for (let i = 0; i < count; i++) {
+      const page = document.createElement('div');
+      page.className = 'sheet-page' + (i > 0 ? ' is-extra' : '');
+      page.style.top = `${i * PAGE_STRIDE}px`;
+
+      if (count > 1) {
+        const label = document.createElement('span');
+        label.className = 'sheet-page-label';
+        label.textContent = `Page ${i + 1} of ${count}`;
+        page.append(label);
+      }
+
+      pages.push(page);
+    }
+
+    pagesLayer.replaceChildren(...pages);
+    stack.style.height = `${count * PAGE_STRIDE - PAGE_GAP}px`;
+    sheetBranding.style.top = `${(count - 1) * PAGE_STRIDE}px`;
+  }
+
+  function updateBadge() {
+    const pages = exactPages ?? estimatedPages;
+    pageBadge.textContent = pages === 1 ? '1 page' : `${pages} pages`;
+    pageBadge.classList.toggle('is-multi', pages > 1);
+    pageBadge.classList.toggle('is-checking', exactPages === null);
+    pageBadge.title = exactPages === null
+      ? 'Estimated from the preview, checking against the PDF…'
+      : 'Checked against the generated PDF';
+  }
+
+  // Ask the server how many pages the real PDF has (the preview can differ by a line in rare cases)
+  let checkTimer = null;
+  let checkSequence = 0;
+
+  function scheduleExactCheck() {
+    clearTimeout(checkTimer);
+    exactPages = null;
+    updateBadge();
+    checkTimer = setTimeout(checkExactPages, 1200);
+  }
+
+  async function checkExactPages() {
+    const sequence = ++checkSequence;
+    syncEditableFields();
+
+    const data = new FormData(form);
+    data.delete('photo_upload');
+    if (pendingPhoto) data.set('photo_pending', '1');
+
+    try {
+      const response = await fetch('create_pdf.php?page_count=1', { method: 'POST', body: data, credentials: 'same-origin' });
+      if (!response.ok) return;
+
+      const result = await response.json();
+      if (sequence === checkSequence && Number.isInteger(result.pages)) {
+        exactPages = result.pages;
+        updateBadge();
+      }
+    } catch (error) {
+      // Keep the estimate when the check is not available
+    }
+  }
+
+  function contentChanged() {
+    updateSeparators();
+    updateEmptySections();
+    scheduleLayout();
+    scheduleExactCheck();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Style options
+  // ---------------------------------------------------------------------------
+
+  function applyLanguage(language) {
+    const titles = sectionTitles[language] || sectionTitles.en;
+    resumePreview.querySelectorAll('.sheet-heading-text[data-default-title]').forEach(heading => {
+      if (heading.dataset.custom !== '1') {
+        heading.textContent = titles[heading.dataset.defaultTitle];
+      }
+    });
+    document.querySelectorAll('[data-section-title]').forEach(element => {
+      element.textContent = titles[element.dataset.sectionTitle] || element.textContent;
+    });
+  }
+
+  function setPreviewVisibility(sectionId, shouldShow) {
+    const section = document.getElementById(sectionId);
+    if (section) section.classList.toggle('is-hidden-in-preview', !shouldShow);
+  }
+
+  function setBrandingVisibility(shouldShow) {
+    document.querySelectorAll('.qrsume-branding-preview-item').forEach(item => {
+      item.classList.toggle('is-hidden-in-preview', !shouldShow);
+    });
+  }
+
+  languageSelector.addEventListener('change', event => {
+    applyLanguage(event.target.value);
+    contentChanged();
+  });
+
+  fontSelector.addEventListener('change', event => {
+    stack.dataset.font = event.target.value;
+    contentChanged();
+  });
+
+  fontSizeSelector.addEventListener('change', event => {
+    stack.style.setProperty('--c', `${Number(event.target.value)}pt`);
+    contentChanged();
+  });
+
+  spacingSelector.addEventListener('change', event => {
+    stack.style.setProperty('--sp', `${Number(event.target.value)}pt`);
+    contentChanged();
+  });
+
+  toggleBio.addEventListener('change', event => {
+    setPreviewVisibility('bioSection', event.target.checked);
+    contentChanged();
+  });
+
+  togglePhoto.addEventListener('change', () => {
+    updateHeaderLayout();
+    contentChanged();
+  });
+
+  toggleEducationDescription.addEventListener('change', event => {
+    resumePreview.classList.toggle('hide-edu-desc', !event.target.checked);
+    contentChanged();
+  });
 
   if (toggleQr) {
-    setQrsumeBrandingVisibility(toggleQr.checked);
+    toggleQr.addEventListener('change', event => {
+      setBrandingVisibility(event.target.checked);
+      contentChanged();
+    });
+  }
+
+  document.querySelectorAll('[data-preview-section]').forEach(toggle => {
+    toggle.addEventListener('change', event => {
+      setPreviewVisibility(event.target.dataset.previewSection, event.target.checked);
+      contentChanged();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Section order (drag and drop in the sidebar)
+  // ---------------------------------------------------------------------------
+
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.section-order-item:not(.dragging)')];
+
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+
+      if (offset < 0 && offset > closest.offset) {
+        return { offset, element: child };
+      }
+
+      return closest;
+    }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+  }
+
+  function getCurrentSectionOrder() {
+    return [...sectionOrderList.querySelectorAll('.section-order-item')]
+      .map(item => item.dataset.section)
+      .filter(Boolean);
+  }
+
+  function syncSectionOrder() {
+    const order = getCurrentSectionOrder();
+    sectionOrderInput.value = order.join(',');
+
+    order.forEach(sectionKey => {
+      const section = resumePreview.querySelector(`[data-resume-section="${sectionKey}"]`);
+      if (section) resumePreview.appendChild(section);
+    });
+
+    contentChanged();
+  }
+
+  sectionOrderList.addEventListener('dragstart', event => {
+    const item = event.target.closest('.section-order-item');
+    if (item) item.classList.add('dragging');
+  });
+
+  sectionOrderList.addEventListener('dragend', event => {
+    const item = event.target.closest('.section-order-item');
+    if (!item) return;
+    item.classList.remove('dragging');
+    syncSectionOrder();
+  });
+
+  sectionOrderList.addEventListener('dragover', event => {
+    event.preventDefault();
+    const draggingItem = sectionOrderList.querySelector('.dragging');
+    if (!draggingItem) return;
+
+    const afterElement = getDragAfterElement(sectionOrderList, event.clientY);
+    if (afterElement === null) {
+      sectionOrderList.appendChild(draggingItem);
+    } else {
+      sectionOrderList.insertBefore(draggingItem, afterElement);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Start
+  // ---------------------------------------------------------------------------
+
+  form.addEventListener('submit', syncEditableFields);
+
+  setupEditables(resumePreview);
+  stack.dataset.font = fontSelector.value;
+  stack.style.setProperty('--c', `${Number(fontSizeSelector.value)}pt`);
+  stack.style.setProperty('--sp', `${Number(spacingSelector.value)}pt`);
+  resumePreview.classList.toggle('hide-edu-desc', !toggleEducationDescription.checked);
+  if (toggleQr) setBrandingVisibility(toggleQr.checked);
+  updateHeaderLayout();
+  syncSectionOrder();
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(scheduleLayout);
   }
 });
 </script>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -78,7 +78,7 @@ try {
 
 $username = $user['username'];
 
-$titles = resumeSectionTitles(resumeLanguage());
+$titles = array_merge(resumeSectionTitles(resumeLanguage()), resumeSectionTitleOverrides());
 
 /**
  * Escape a plain-text value for safe inclusion in LaTeX source.
@@ -198,7 +198,7 @@ foreach ($sectionOrder as $sectionKey) {
             $tex .= latexSection($titles['languages']);
             $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
             foreach ($languages as $lang) {
-                $tex .= "\\item " . latexEscape(($lang['language'] ?? '') . ' (' . ($lang['level'] ?? '') . ')') . "\n";
+                $tex .= "\\item " . latexEscape(resumeLanguageLine($lang)) . "\n";
             }
             $tex .= "\\end{itemize}\n\n";
             break;
