@@ -145,7 +145,16 @@ if ($display_photo) {
         $photoData = loadResumePhoto($upload['tmp_name']);
     }
     if ($photoData === null && $storedPhoto !== '' && $storedPhoto !== 'default.webp') {
-        $photoData = loadResumePhoto(__DIR__ . '/images/' . basename($storedPhoto));
+        // Stored as "username/profile_picture/name.webp?ts=123": drop the cache-busting query
+        // and make sure the resolved file stays inside images/
+        $imagesDir = realpath(__DIR__ . '/images');
+        $photoPath = realpath(__DIR__ . '/images/' . strtok($storedPhoto, '?'));
+        if ($imagesDir !== false && $photoPath !== false && str_starts_with($photoPath, $imagesDir . DIRECTORY_SEPARATOR)) {
+            $photoData = loadResumePhoto($photoPath);
+        }
+        if ($photoData === null) {
+            error_log("create_pdf: could not load stored photo for user {$user_id}: {$storedPhoto}");
+        }
     }
 }
 
