@@ -7,6 +7,7 @@ if (php_sapi_name() === 'cli-server') {
 
 // Database connection
 include("assets/db.php");
+require_once("assets/resume_options.php");
 
 // Ensure user is logged in or username is provided
 if (!isset($_GET['username'])) {
@@ -34,7 +35,7 @@ if (!$user) {
     exit();
 }
 
-$user_id = $user['id'];
+$user_id = (int) $user['id'];
 
 try {
     $pdo = $db;
@@ -68,29 +69,16 @@ try {
     $languages        = $_POST['languages'] ?? [];
     $interests        = $_POST['projects'] ?? [];
     $custom_sections  = $_POST['custom_sections'] ?? [];
+
+    $display_branding = resumeShowBranding($db, $user_id, $user['username']);
+    $sectionOrder = resumeSectionOrder((string) ($_POST['section_order'] ?? ''), array_keys($custom_sections));
 } catch (PDOException $e) {
     die("Database error: " . $e->getMessage());
 }
 
 $username = $user['username'];
 
-$language = isset($_GET['spanish']) && $_GET['spanish'] === 'true' ? 'spanish' : 'english';
-
-$spanish_titles = [
-    'education'       => 'Educación',
-    'work_experience' => 'Experiencia Laboral',
-    'skills'          => 'Aptitudes',
-    'languages'       => 'Idiomas',
-    'projects'        => 'Proyectos',
-];
-$english_titles = [
-    'education'       => 'Education',
-    'work_experience' => 'Work Experience',
-    'skills'          => 'Skills',
-    'languages'       => 'Languages',
-    'projects'        => 'Projects',
-];
-$titles = ($language === 'spanish') ? $spanish_titles : $english_titles;
+$titles = resumeSectionTitles(resumeLanguage());
 
 /**
  * Escape a plain-text value for safe inclusion in LaTeX source.
@@ -148,7 +136,9 @@ if ($contact['email'] !== '') {
 if ($contact['phone_number'] !== '') {
     $contactLine[] = latexEscape($contact['phone_number']);
 }
-$contactLine[] = '\\href{' . $profileLink . '}{qrsume.com/' . latexEscape($username) . '}';
+if ($display_branding) {
+    $contactLine[] = '\\href{' . $profileLink . '}{qrsume.com/' . latexEscape($username) . '}';
+}
 $tex .= implode(' $\\vert$ ', $contactLine) . "\n\n";
 
 // ========== BIO ==========
@@ -156,72 +146,92 @@ if ($personalBio && $personal['personal_bio'] !== '') {
     $tex .= "\\vspace{0.8em}\n" . latexEscape($personal['personal_bio']) . "\n\n";
 }
 
-// ========== EDUCATION ==========
-if (!empty($education) && $display_education) {
-    $tex .= latexSection($titles['education']);
-    foreach ($education as $edu) {
-        $tex .= "\\textbf{" . latexEscape($edu['name_of_studies'] ?? '') . "} \\hfill " . latexEscape($edu['date'] ?? '') . "\\\\\n";
-        $tex .= latexEscape($edu['place_of_study'] ?? '') . "\n\n";
-        if ($showDescription && !empty($edu['desc'])) {
-            $tex .= latexEscape($edu['desc']) . "\n\n";
-        }
-    }
-}
+// ========== SECTIONS (in the order chosen in the preview) ==========
+foreach ($sectionOrder as $sectionKey) {
+    switch ($sectionKey) {
+        // ========== EDUCATION ==========
+        case 'education':
+            if (empty($education) || !$display_education) {
+                break;
+            }
+            $tex .= latexSection($titles['education']);
+            foreach ($education as $edu) {
+                $tex .= "\\textbf{" . latexEscape($edu['name_of_studies'] ?? '') . "} \\hfill " . latexEscape($edu['date'] ?? '') . "\\\\\n";
+                $tex .= latexEscape($edu['place_of_study'] ?? '') . "\n\n";
+                if ($showDescription && !empty($edu['desc'])) {
+                    $tex .= latexEscape($edu['desc']) . "\n\n";
+                }
+            }
+            break;
 
-// ========== WORK EXPERIENCE ==========
-if (!empty($experience) && $display_experience) {
-    $tex .= latexSection($titles['work_experience']);
-    foreach ($experience as $exp) {
-        $jobTitle = trim(($exp['job_name'] ?? '') . ' ' . ($exp['place_of_work'] ?? ''));
-        $tex .= "\\textbf{" . latexEscape($jobTitle) . "} \\hfill " . latexEscape($exp['date'] ?? '') . "\\\\\n";
-        $tex .= latexEscape($exp['brief_description'] ?? '') . "\n\n";
-    }
-}
+        // ========== WORK EXPERIENCE ==========
+        case 'experience':
+            if (empty($experience) || !$display_experience) {
+                break;
+            }
+            $tex .= latexSection($titles['experience']);
+            foreach ($experience as $exp) {
+                $jobTitle = resumeJobTitle($exp);
+                $tex .= "\\textbf{" . latexEscape($jobTitle) . "} \\hfill " . latexEscape($exp['date'] ?? '') . "\\\\\n";
+                $tex .= latexEscape($exp['brief_description'] ?? '') . "\n\n";
+            }
+            break;
 
-// ========== SKILLS ==========
-if (!empty($skills) && $display_skills) {
-    $tex .= latexSection($titles['skills']);
-    $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
-    foreach ($skills as $skill) {
-        $tex .= "\\item " . latexEscape($skill['aptitude'] ?? '') . "\n";
-    }
-    $tex .= "\\end{itemize}\n\n";
-}
+        // ========== SKILLS ==========
+        case 'skills':
+            if (empty($skills) || !$display_skills) {
+                break;
+            }
+            $tex .= latexSection($titles['skills']);
+            $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
+            foreach ($skills as $skill) {
+                $tex .= "\\item " . latexEscape($skill['aptitude'] ?? '') . "\n";
+            }
+            $tex .= "\\end{itemize}\n\n";
+            break;
 
-// ========== LANGUAGES ==========
-if (!empty($languages) && $display_languages) {
-    $tex .= latexSection($titles['languages']);
-    $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
-    foreach ($languages as $lang) {
-        $tex .= "\\item " . latexEscape(($lang['language'] ?? '') . ' (' . ($lang['level'] ?? '') . ')') . "\n";
-    }
-    $tex .= "\\end{itemize}\n\n";
-}
+        // ========== LANGUAGES ==========
+        case 'languages':
+            if (empty($languages) || !$display_languages) {
+                break;
+            }
+            $tex .= latexSection($titles['languages']);
+            $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
+            foreach ($languages as $lang) {
+                $tex .= "\\item " . latexEscape(($lang['language'] ?? '') . ' (' . ($lang['level'] ?? '') . ')') . "\n";
+            }
+            $tex .= "\\end{itemize}\n\n";
+            break;
 
-// ========== PROJECTS / INTERESTS ==========
-if (!empty($interests) && $display_projects) {
-    $tex .= latexSection($titles['projects']);
-    foreach ($interests as $int) {
-        $tex .= "\\textbf{" . latexEscape($int['interest'] ?? '') . "}\\\\\n";
-        $tex .= latexEscape($int['description'] ?? '') . "\n\n";
-    }
-}
+        // ========== PROJECTS / INTERESTS ==========
+        case 'projects':
+            if (empty($interests) || !$display_projects) {
+                break;
+            }
+            $tex .= latexSection($titles['projects']);
+            foreach ($interests as $int) {
+                $tex .= "\\textbf{" . latexEscape($int['interest'] ?? '') . "}\\\\\n";
+                $tex .= latexEscape($int['description'] ?? '') . "\n\n";
+            }
+            break;
 
-// ========== CUSTOM SECTIONS ==========
-if (!empty($custom_sections)) {
-    foreach ($custom_sections as $i => $section) {
-        if (empty($display_custom_sections[$i])) {
-            continue;
-        }
-        $tex .= latexSection(strtoupper($section['section_title'] ?? ''));
-        $tex .= latexEscape($section['section_content'] ?? '') . "\n\n";
+        // ========== CUSTOM SECTIONS ==========
+        default:
+            $i = substr($sectionKey, strlen('custom_'));
+            $section = $custom_sections[$i] ?? null;
+            if ($section === null || empty($display_custom_sections[$i])) {
+                break;
+            }
+            $tex .= latexSection(mb_strtoupper($section['section_title'] ?? ''));
+            $tex .= latexEscape($section['section_content'] ?? '') . "\n\n";
+            break;
     }
 }
 
 $tex .= "\\end{document}\n";
 
 // ========== OUTPUT .tex FILE ==========
-$filename = 'resume_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $personal['personal_name'] ?: $username) . '.tex';
+$filename = resumeFilename($personal['personal_name'], $personal['personal_lastname'], $username, 'tex');
 
 header('Content-Type: application/x-tex; charset=utf-8');
 header('Content-Disposition: attachment; filename="' . $filename . '"');

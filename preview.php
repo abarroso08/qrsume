@@ -15,7 +15,7 @@ declare(strict_types=1);
  */
 
 include("assets/head.php");
-include("assets/premium.php");
+require_once("assets/resume_options.php");
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -92,13 +92,14 @@ try {
     $projects = rowsByUser($pdo, 'interests', $userId);
     $customSections = rowsByUser($pdo, 'custom_sections', $userId);
 
-    $canRemoveBranding = userHasPurchase($db, $userId, 'remove_qrsume_branding');
+    $canRemoveBranding = resumeCanRemoveBranding($db, $userId, (string) ($account['username'] ?? $username));
 } catch (PDOException $exception) {
     error_log('Resume preview database error: ' . $exception->getMessage());
     redirectToError();
 }
 
-$photoUrl = !empty($personal['personal_photo'])
+// default.webp is the generic placeholder: treat it as "no photo" (it is never printed in the PDF)
+$photoUrl = !empty($personal['personal_photo']) && $personal['personal_photo'] !== 'default.webp'
     ? 'images/' . e($personal['personal_photo'])
     : '';
 
@@ -109,14 +110,16 @@ foreach ($customSections as $index => $section) {
 }
 
 $defaultSectionOrder = implode(',', $sectionOrder);
+$resumeLanguage = resumeLanguage();
+$sectionTitles = ['en' => resumeSectionTitles('en'), 'es' => resumeSectionTitles('es')];
 $profileUrl = 'https://qrsume.com/' . $username;
 $profileText = 'qrsume.com/' . $username;
 ?>
 
 <style>
   :root {
-    --preview-page-width: 816px;
-    --preview-page-min-height: 1056px;
+    --preview-page-width: 794px; /* A4 at 96dpi, same paper as the PDF */
+    --preview-page-min-height: 1123px;
     --resume-font-base: 16px;
     --resume-font-title: 18px;
     --resume-font-section: 22px;
@@ -791,6 +794,13 @@ $profileText = 'qrsume.com/' . $username;
         <h2 id="style-controls-title">Style</h2>
 
         <div class="control-field">
+          <label for="resumeLanguage">Resume language</label>
+          <select name="lan" id="resumeLanguage" class="form-select">
+            <option value="en"<?= $resumeLanguage === 'en' ? ' selected' : '' ?>>English</option>
+            <option value="es"<?= $resumeLanguage === 'es' ? ' selected' : '' ?>>Español</option>
+          </select>
+        </div>
+        <div class="control-field">
           <label for="font">Font</label>
           <select name="font" id="font" class="form-select">
             <option value="times">Times</option>
@@ -936,7 +946,7 @@ $profileText = 'qrsume.com/' . $username;
           <div class="section-order-item" draggable="true" data-section="skills">
             <label class="section-order-label" for="showSkills">
               <input type="checkbox" name="show_skills" id="showSkills" data-preview-section="skillsSection" checked>
-              <span>Aptitudes</span>
+              <span>Skills</span>
             </label>
             <span class="section-order-handle" title="Drag to reorder">☰</span>
           </div>
@@ -989,11 +999,8 @@ $profileText = 'qrsume.com/' . $username;
       <section class="sidebar-card" aria-labelledby="generate-controls-title">
         <h2 id="generate-controls-title">Generate PDF</h2>
         <div class="sidebar-actions">
-          <button type="submit" class="btn btn-primary" formaction="https://qrsume.com/create_pdf.php?lan=en" formtarget="_blank">
-            Generate PDF (English)
-          </button>
-          <button type="submit" class="btn btn-secondary" formaction="https://qrsume.com/create_pdf.php?lan=es" formtarget="_blank">
-            Generar PDF (Español)
+          <button type="submit" class="btn btn-primary" formaction="https://qrsume.com/create_pdf.php" formtarget="_blank">
+            Generate PDF
           </button>
           <button type="submit" class="btn btn-outline-secondary" formaction="https://qrsume.com/create_latex.php" formtarget="_blank">
             Download LaTeX (.tex)
@@ -1006,7 +1013,7 @@ $profileText = 'qrsume.com/' . $username;
     <section class="builder-preview-area" aria-label="Editable resume preview">
       <div class="preview-topbar">
         <span><strong>Live preview</strong> — click any text field to edit it.</span>
-        <span>A4-style page</span>
+        <span>A4 page</span>
       </div>
 
       <article class="resume-container" id="resumePreview" aria-label="Resume preview">
@@ -1084,7 +1091,7 @@ $profileText = 'qrsume.com/' . $username;
 
         <section class="resume-section" id="educationSection" data-resume-section="education">
           <div class="section-heading">
-            <span>Education</span>
+            <span data-section-title="education"><?= e($sectionTitles[$resumeLanguage]['education']) ?></span>
           </div>
 
           <?php foreach ($education as $index => $edu): ?>
@@ -1105,7 +1112,7 @@ $profileText = 'qrsume.com/' . $username;
 
         <section class="resume-section" id="experienceSection" data-resume-section="experience">
           <div class="section-heading">
-            <span>Work Experience</span>
+            <span data-section-title="experience"><?= e($sectionTitles[$resumeLanguage]['experience']) ?></span>
           </div>
 
           <?php foreach ($experience as $index => $exp): ?>
@@ -1126,7 +1133,7 @@ $profileText = 'qrsume.com/' . $username;
 
         <section class="resume-section" id="skillsSection" data-resume-section="skills">
           <div class="section-heading">
-            <span>Aptitudes</span>
+            <span data-section-title="skills"><?= e($sectionTitles[$resumeLanguage]['skills']) ?></span>
           </div>
 
           <div class="two-column-list">
@@ -1138,7 +1145,7 @@ $profileText = 'qrsume.com/' . $username;
 
         <section class="resume-section" id="languagesSection" data-resume-section="languages">
           <div class="section-heading">
-            <span>Languages</span>
+            <span data-section-title="languages"><?= e($sectionTitles[$resumeLanguage]['languages']) ?></span>
           </div>
 
           <div class="language-list">
@@ -1153,7 +1160,7 @@ $profileText = 'qrsume.com/' . $username;
 
         <section class="resume-section" id="projectsSection" data-resume-section="projects">
           <div class="section-heading">
-            <span>Projects</span>
+            <span data-section-title="projects"><?= e($sectionTitles[$resumeLanguage]['projects']) ?></span>
           </div>
 
           <?php foreach ($projects as $index => $project): ?>
@@ -1194,7 +1201,7 @@ $profileText = 'qrsume.com/' . $username;
           <div class="resume-branding-qr-box">
             <i class="bi bi-qr-code"></i>
           </div>
-          <span class="resume-branding-qr-label">Full Profile<br>&amp; Projects</span>
+          <span class="resume-branding-qr-label" data-section-title="full_profile"><?= e($sectionTitles[$resumeLanguage]['full_profile']) ?></span>
         </div>
       </article>
     </section>
@@ -1207,6 +1214,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const fontSelector = document.getElementById('font');
   const fontSizeSelector = document.getElementById('contentFontSize');
   const spacingSelector = document.getElementById('spaceSize');
+  const languageSelector = document.getElementById('resumeLanguage');
+  const sectionTitles = <?= json_encode($sectionTitles, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
   const photoInput = document.getElementById('photoInput');
   const photoPreview = document.getElementById('photoPreview');
   const photoPlaceholder = document.getElementById('photoPlaceholder');
@@ -1237,6 +1246,13 @@ document.addEventListener('DOMContentLoaded', () => {
     resumePreview.style.setProperty('--resume-font-name', `${basePx * 2.5}px`);
 
     resizeAllTextareas();
+  }
+
+  function applyLanguage(language) {
+    const titles = sectionTitles[language] || sectionTitles.en;
+    document.querySelectorAll('[data-section-title]').forEach(element => {
+      element.textContent = titles[element.dataset.sectionTitle] || element.textContent;
+    });
   }
 
   function applySpacing(value) {
@@ -1366,6 +1382,7 @@ document.addEventListener('DOMContentLoaded', () => {
     syncSectionOrder();
   }
 
+  languageSelector.addEventListener('change', event => applyLanguage(event.target.value));
   fontSelector.addEventListener('change', event => applyFont(event.target.value));
   fontSizeSelector.addEventListener('change', event => applyFontSize(event.target.value));
   spacingSelector.addEventListener('change', event => applySpacing(event.target.value));
