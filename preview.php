@@ -513,6 +513,18 @@ $profileText = 'qrsume.com/' . $username;
     gap: .35rem;
   }
 
+  /* With a photo, name and contact start right after it (same as the PDF) */
+  .resume-header.has-photo .name-row,
+  .resume-header.has-photo .contact-row {
+    justify-content: flex-start;
+  }
+
+  .resume-header.has-photo .name-row .editable-input,
+  .resume-header.has-photo .contact-row .editable-input {
+    flex: 0 0 auto;
+    text-align: left !important;
+  }
+
   .qrsume-preview-link,
   .qrsume-bottom-link {
     color: #2563eb;
@@ -1233,8 +1245,31 @@ document.addEventListener('DOMContentLoaded', () => {
     helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif"
   };
 
+  const resumeHeader = document.querySelector('.resume-header');
+  const headerInputs = resumeHeader.querySelectorAll('.name-row .editable-input, .contact-row .editable-input');
+  const measureContext = document.createElement('canvas').getContext('2d');
+
+  function fitInputWidth(input) {
+    const style = getComputedStyle(input);
+    measureContext.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    input.style.width = `${Math.ceil(measureContext.measureText(input.value || input.placeholder).width) + 4}px`;
+  }
+
+  function updateHeaderLayout() {
+    const hasPhoto = togglePhoto.checked && photoPreview.style.display !== 'none';
+    resumeHeader.classList.toggle('has-photo', hasPhoto);
+    headerInputs.forEach(input => {
+      if (hasPhoto) {
+        fitInputWidth(input);
+      } else {
+        input.style.width = '';
+      }
+    });
+  }
+
   function applyFont(fontKey) {
     resumePreview.style.fontFamily = fontFamilies[fontKey] || fontFamilies.times;
+    updateHeaderLayout();
   }
 
   function applyFontSize(sizePt) {
@@ -1246,6 +1281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resumePreview.style.setProperty('--resume-font-name', `${basePx * 2.5}px`);
 
     resizeAllTextareas();
+    updateHeaderLayout();
   }
 
   function applyLanguage(language) {
@@ -1399,6 +1435,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   togglePhoto.addEventListener('change', event => {
     photoWrapper.classList.toggle('is-muted', !event.target.checked);
+    updateHeaderLayout();
   });
 
   toggleEducationDescription.addEventListener('change', event => {
@@ -1434,9 +1471,12 @@ document.addEventListener('DOMContentLoaded', () => {
       photoPreview.src = loadEvent.target.result;
       photoPreview.style.display = 'block';
       photoPlaceholder.style.display = 'none';
+      updateHeaderLayout();
     };
     reader.readAsDataURL(file);
   });
+
+  headerInputs.forEach(input => input.addEventListener('input', updateHeaderLayout));
 
   initializeSectionDragAndDrop();
   applyFont(fontSelector.value);

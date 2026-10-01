@@ -231,9 +231,10 @@ if ($photoData !== null) {
     $pdf->SetLineStyle(array('width' => 0.75, 'color' => array(207, 207, 207)));
     $pdf->Rect($marginL, $headerTop, $photoWidth, $photoHeight);
 
-    // Name and contact are centered in the space next to the photo
-    $headerX += $photoWidth + 15;
-    $headerWidth -= $photoWidth + 15;
+    // Name and contact sit right next to the photo, left-aligned
+    $header_position = "L";
+    $headerX += $photoWidth + 12;
+    $headerWidth -= $photoWidth + 12;
     $pdf->SetY($headerTop + max(0, ($photoHeight - $nameHeight - $contactHeight) / 2));
 }
 
@@ -261,8 +262,8 @@ $contactWidth = $pdf->GetStringWidth($contactInfo);
 $linkWidth = $pdf->GetStringWidth($linkText);
 $totalWidth = $contactWidth + $linkWidth;
 
-// Calcular X para centrar todo
-$pdf->SetX($headerX + max(0, ($headerWidth - $totalWidth) / 2));
+// Calcular X: centrado sin foto, alineado a la izquierda junto a la foto
+$pdf->SetX($header_position === "L" ? $headerX : $headerX + max(0, ($headerWidth - $totalWidth) / 2));
 
 // Escribir parte en negro
 $pdf->SetTextColor(0, 0, 0);
