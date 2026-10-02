@@ -42,6 +42,18 @@ foreach ($quick_access_tables as $table) {
 
 $personalinfo = $results['personalinfo'][0] ?? null;
 
+// Filling the form from a CV in PDF: 1 free import, 5 more with premium
+require_once __DIR__ . '/../PDFtoCV/lib/PdfResumeImport.php';
+try {
+    $pdfImport = (new PdfResumeImport($db))->allowance((int) $_SESSION['id'], ($_SESSION['privilege'] ?? '') === 'admin');
+} catch (PDOException $exception) {
+    // e.g. the pdf_imports migration has not run yet: hide the import instead of breaking the form
+    error_log('PDF import allowance: ' . $exception->getMessage());
+    $pdfImport = null;
+}
+$pdfImportFlash = $_SESSION['pdf_import_flash'] ?? null;
+unset($_SESSION['pdf_import_flash']);
+
 $sql = "SELECT photo_url FROM photos WHERE user_id = :user_id";
 $stmt = $db->prepare($sql);
 $stmt->bindValue(':user_id', $_SESSION['id'], PDO::PARAM_INT);
@@ -131,6 +143,29 @@ $progressPercent = intval(($sectionNumber + 1) / $totalSections * 100);
     --font-base: 8px;
     /* Reduced from 12px */
   }
+  .pdf-import-card {
+    padding: 1rem 1.1rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    background: #eff6ff;
+  }
+
+  .pdf-import-card.is-locked {
+    border-color: #e4e4e7;
+    background: #fafafa;
+  }
+
+  .pdf-import-icon {
+    flex: 0 0 auto;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: #2563eb;
+  }
+
+  .is-locked .pdf-import-icon {
+    color: #a1a1aa;
+  }
+
   .text-small{
       font-size: 12px;!important
   }
@@ -242,6 +277,67 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
         <div class="bg-white shadow section-round-top p-4 w-100 h-100" id="sectionWrapper" style="">
           <!-- Section 0: Personal Info -->
 <section class="form-section <?= $sectionNumber === 0 ? '' : 'd-none' ?>" id="section-0">
+    <!-- Fill the form from a CV in PDF -->
+    <div id="pdf-import">
+      <?php if ($pdfImportFlash): ?>
+        <div class="alert alert-<?= $pdfImportFlash['type'] === 'success' ? 'success' : 'danger' ?> alert-dismissible fade show" role="alert">
+          <?= htmlspecialchars($pdfImportFlash['message']) ?>
+          <?php foreach ($pdfImportFlash['notes'] as $note): ?>
+            <div class="small mt-1"><?= htmlspecialchars($note) ?></div>
+          <?php endforeach; ?>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($pdfImport === null): ?>
+        <?php /* import unavailable */ ?>
+      <?php elseif ($pdfImport['remaining'] > 0): ?>
+        <div class="pdf-import-card d-flex gap-3 mb-4">
+          <i class="bi bi-file-earmark-arrow-up pdf-import-icon" aria-hidden="true"></i>
+          <div class="flex-grow-1">
+            <h3 class="h6 fw-bold mb-1">Start from your current CV</h3>
+            <p class="small text-muted mb-2">
+              Upload your CV as a <strong>one-page PDF</strong> and we will fill in this form for you.
+              Then go through each step to fix anything that is wrong or missing.
+            </p>
+            <form id="pdfImportForm" method="post" action="https://qrsume.com/create_resume/upload/import_pdf.php" enctype="multipart/form-data" class="d-flex flex-wrap gap-2">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+              <input type="hidden" name="MAX_FILE_SIZE" value="<?= PdfResumeImport::maxUploadBytes() ?>">
+              <input type="file" name="cv_pdf" class="form-control form-control-sm" style="max-width: 320px;" accept="application/pdf,.pdf" required>
+              <button type="submit" class="btn btn-primary btn-sm" id="pdfImportButton">
+                <span class="spinner-border spinner-border-sm me-1 d-none" id="pdfImportSpinner" role="status" aria-hidden="true"></span>
+                <span id="pdfImportLabel">Fill the form from my PDF</span>
+              </button>
+            </form>
+            <p class="small text-muted mt-2 mb-0">
+              <i class="bi bi-exclamation-triangle text-warning" aria-hidden="true"></i>
+              This replaces what is in the form now.
+              <?php if (!$pdfImport['unlimited']): ?>
+                <?= $pdfImport['remaining'] === 1 ? 'You can do this once' : 'You have ' . $pdfImport['remaining'] . ' imports left' ?><?= $pdfImport['premium'] ? '' : ' (premium gives you ' . PdfResumeImport::PREMIUM_EXTRA_IMPORTS . ' more)' ?>.
+              <?php endif; ?>
+              The PDF is read by Adobe PDF Services.
+            </p>
+          </div>
+        </div>
+      <?php elseif (!$pdfImport['premium']): ?>
+        <div class="pdf-import-card is-locked d-flex gap-3 mb-4">
+          <i class="bi bi-lock-fill pdf-import-icon" aria-hidden="true"></i>
+          <div class="flex-grow-1">
+            <h3 class="h6 fw-bold mb-1">Import from PDF is locked</h3>
+            <p class="small text-muted mb-2">
+              You have used your free CV import. Premium removes the QRsume branding from your PDFs and gives you
+              <?= PdfResumeImport::PREMIUM_EXTRA_IMPORTS ?> more imports.
+            </p>
+            <a href="https://qrsume.com/checkout_remove_branding.php?return=form" class="btn btn-warning btn-sm">
+              <i class="bi bi-unlock2-fill me-1" aria-hidden="true"></i> Get premium
+            </a>
+          </div>
+        </div>
+      <?php else: ?>
+        <p class="small text-muted mb-4"><i class="bi bi-lock me-1" aria-hidden="true"></i>You have used all your CV imports from PDF.</p>
+      <?php endif; ?>
+    </div>
+
     <h2>Personal Information</h2>
     <div id="photo-upload-status"></div>
 
@@ -1408,6 +1504,18 @@ document.addEventListener("DOMContentLoaded", function () {
   formToggle.init();
   profilePhotoModalPreview.init();
   profilePhotoDropdownPreview.init();
+});
+
+
+// === PDF IMPORT: confirm and show progress (Adobe can take up to a minute) ===
+document.getElementById('pdfImportForm')?.addEventListener('submit', event => {
+  if (!confirm('This replaces the information in the form with the content of your PDF. Continue?')) {
+    event.preventDefault();
+    return;
+  }
+  document.getElementById('pdfImportButton').disabled = true;
+  document.getElementById('pdfImportSpinner').classList.remove('d-none');
+  document.getElementById('pdfImportLabel').textContent = 'Reading your CV…';
 });
 
 

@@ -11,49 +11,17 @@ declare(strict_types=1);
  * - Browser: shows the JSON with copy / download buttons.
  * - API: POST with "Accept: application/json" (or ?format=json) returns the JSON itself.
  *
+ * Admin tool: users import their CV from create_resume/form_with_login.php (with its allowance).
  * Needs ADOBE_PDF_SERVICES_CLIENT_ID and ADOBE_PDF_SERVICES_CLIENT_SECRET in .env
  * (optional ADOBE_PDF_SERVICES_REGION=eu to process documents in Europe).
  */
 
 require_once __DIR__ . '/../assets/db.php';
-require_once __DIR__ . '/lib/AdobePdfExtract.php';
-require_once __DIR__ . '/lib/ResumeExtractor.php';
-
-const PDFTOCV_MAX_BYTES = 10 * 1024 * 1024; // lowered to PHP's upload limits if those are smaller
-const PDFTOCV_MAX_PAGES = 10;            // resumes are short; keeps the free monthly quota for real use
-const PDFTOCV_CONVERSIONS_PER_HOUR = 10;
-
-final class PdfToCvError extends RuntimeException
-{
-}
+require_once __DIR__ . '/lib/PdfResumeImport.php';
 
 function e(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
-}
-
-/**
- * Largest upload this server accepts: our limit, or PHP's upload_max_filesize / post_max_size if smaller.
- */
-function maxUploadBytes(): int
-{
-    $limit = PDFTOCV_MAX_BYTES;
-    foreach (['upload_max_filesize', 'post_max_size'] as $setting) {
-        $value = trim((string) ini_get($setting));
-        $bytes = function_exists('ini_parse_quantity')
-            ? ini_parse_quantity($value)
-            : (int) $value * (1024 ** (int) strpos('bkmg', strtolower(substr($value, -1)) ?: 'b'));
-        if ($bytes > 0) {
-            $limit = min($limit, $bytes);
-        }
-    }
-
-    return $limit;
-}
-
-function formatMegabytes(int $bytes): string
-{
-    return rtrim(rtrim(number_format($bytes / 1048576, 1), '0'), '.') . ' MB';
 }
 
 function respondJson(int $status, array $payload): never
@@ -67,59 +35,17 @@ function respondJson(int $status, array $payload): never
 /**
  * Validate the upload, send it to Adobe and map the result to the resume structure.
  */
-function convertUploadedPdf(): array
+function convertUploadedPdf(PDO $db): array
 {
-    // Above post_max_size PHP drops the whole request body, token included
-    if ($_POST === [] && $_FILES === [] && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
-        throw new PdfToCvError('The PDF is too large. The limit is ' . formatMegabytes(maxUploadBytes()) . '.', 413);
-    }
-
     if (!hash_equals((string) ($_SESSION['csrf_token'] ?? ''), (string) ($_POST['csrf_token'] ?? ''))) {
+        // A missing token usually means the upload was bigger than PHP accepts
+        PdfResumeImport::validateUpload($_FILES['cv_pdf'] ?? null);
         throw new PdfToCvError('Your session expired. Reload the page and try again.', 403);
     }
 
-    $clientId = (string) env('ADOBE_PDF_SERVICES_CLIENT_ID', '');
-    $clientSecret = (string) env('ADOBE_PDF_SERVICES_CLIENT_SECRET', '');
-    if ($clientId === '' || $clientSecret === '') {
-        throw new PdfToCvError('PDF import is not configured yet.', 503);
-    }
+    $pdfPath = PdfResumeImport::validateUpload($_FILES['cv_pdf'] ?? null);
 
-    $upload = $_FILES['cv_pdf'] ?? null;
-    $uploadError = $upload['error'] ?? UPLOAD_ERR_NO_FILE;
-    if ($uploadError === UPLOAD_ERR_NO_FILE) {
-        throw new PdfToCvError('Choose a PDF file first.', 400);
-    }
-    if (in_array($uploadError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || ($upload['size'] ?? 0) > maxUploadBytes()) {
-        throw new PdfToCvError('The PDF is too large. The limit is ' . formatMegabytes(maxUploadBytes()) . '.', 413);
-    }
-    if ($uploadError !== UPLOAD_ERR_OK || !is_uploaded_file($upload['tmp_name'])) {
-        throw new PdfToCvError('The upload failed. Please try again.', 400);
-    }
-
-    $content = (string) file_get_contents($upload['tmp_name']);
-    if (!str_starts_with($content, '%PDF-')) {
-        throw new PdfToCvError('That file is not a PDF.', 415);
-    }
-
-    // Page objects are not always visible (compressed object streams), so this only catches obvious cases
-    $pages = preg_match_all('#/Type\s*/Page(?![a-zA-Z])#', $content);
-    if ($pages > PDFTOCV_MAX_PAGES) {
-        throw new PdfToCvError('The PDF has more than ' . PDFTOCV_MAX_PAGES . ' pages. Please upload just your resume.', 413);
-    }
-
-    // Each conversion uses the shared Adobe free quota, so limit how often one session can run it
-    $recent = array_filter($_SESSION['pdftocv_runs'] ?? [], fn(int $time) => $time > time() - 3600);
-    if (count($recent) >= PDFTOCV_CONVERSIONS_PER_HOUR) {
-        throw new PdfToCvError('You have imported several PDFs in the last hour. Please try again later.', 429);
-    }
-    $recent[] = time();
-    $_SESSION['pdftocv_runs'] = array_values($recent);
-
-    set_time_limit(150);
-    $adobe = new AdobePdfExtract($clientId, $clientSecret, (string) env('ADOBE_PDF_SERVICES_REGION', 'us'));
-    $structuredData = $adobe->extract($upload['tmp_name']);
-
-    return (new ResumeExtractor())->extract($structuredData);
+    return (new PdfResumeImport($db))->read($pdfPath);
 }
 
 // -----------------------------------------------------------------------------
@@ -136,6 +62,16 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit();
 }
 
+// Users import their CV from the create_resume form, where the import allowance applies.
+// This page reads PDFs without using it, so it is a tool for admins.
+if (($_SESSION['privilege'] ?? '') !== 'admin') {
+    if ($wantsJson) {
+        respondJson(403, ['error' => 'Import your CV from the resume form instead.']);
+    }
+    header('Location: /create_resume/form_with_login.php#pdf-import');
+    exit();
+}
+
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -147,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status = 200;
 
     try {
-        $resume = convertUploadedPdf();
+        $resume = convertUploadedPdf($db);
     } catch (PdfToCvError | AdobePdfExtractException $exception) {
         $error = $exception->getMessage();
         $status = $exception->getCode() >= 400 ? $exception->getCode() : 502;
@@ -313,12 +249,12 @@ $counts = $resume === null ? [] : [
 
   <form class="pdftocv-card mb-4" id="pdfForm" method="POST" action="" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="<?= e($_SESSION['csrf_token']) ?>">
-    <input type="hidden" name="MAX_FILE_SIZE" value="<?= maxUploadBytes() ?>">
+    <input type="hidden" name="MAX_FILE_SIZE" value="<?= PdfResumeImport::maxUploadBytes() ?>">
 
     <label class="drop-zone" id="dropZone">
       <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
       <span class="drop-zone-file" id="fileName">Choose a PDF or drop it here</span>
-      <small class="text-muted">PDF, up to <?= formatMegabytes(maxUploadBytes()) ?> and <?= PDFTOCV_MAX_PAGES ?> pages</small>
+      <small class="text-muted">One-page PDF, up to <?= PdfResumeImport::formatMegabytes(PdfResumeImport::maxUploadBytes()) ?></small>
       <input type="file" name="cv_pdf" id="cvPdf" accept="application/pdf,.pdf" required>
     </label>
 

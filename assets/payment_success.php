@@ -12,6 +12,7 @@ include "head.php";
 
 $username = $_SESSION['username'] ?? null;
 $previewUrl = '/preview.php';
+$fromForm = ($_GET['return'] ?? '') === 'form';
 
 if ($username) {
     $publicProfileUrl = 'https://qrsume.com/' . urlencode((string) $username);
@@ -132,22 +133,30 @@ include("nav_profile.php");
       <h1>Payment successful</h1>
 
       <p>
-        Your branding removal feature is now unlocked. You can generate clean resume PDFs without
-        the QR code and QRsume profile links.
+        Premium is now unlocked. You can generate clean resume PDFs without the QR code and QRsume
+        profile links, and import your CV from a PDF 5 more times.
       </p>
     </div>
 
     <div class="payment-success-body">
       <div class="success-feature-box">
-        <strong>Premium feature unlocked:</strong><br>
-        Remove QRsume branding from your generated resume PDFs whenever you want.
+        <strong>Premium features unlocked:</strong><br>
+        Remove QRsume branding from your generated resume PDFs whenever you want.<br>
+        Fill your resume form from a one-page CV in PDF 5 more times.
       </div>
 
       <div class="payment-actions">
-        <a href="<?= htmlspecialchars($previewUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-primary">
-          <i class="bi bi-file-earmark-pdf-fill me-1"></i>
-          Return to resume preview
-        </a>
+        <?php if ($fromForm): ?>
+          <a href="/create_resume/form_with_login.php#pdf-import" class="btn btn-primary">
+            <i class="bi bi-file-earmark-arrow-up me-1"></i>
+            Back to your resume form
+          </a>
+        <?php else: ?>
+          <a href="<?= htmlspecialchars($previewUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-primary">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>
+            Return to resume preview
+          </a>
+        <?php endif; ?>
       </div>
 
       <p class="small-help">

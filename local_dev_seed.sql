@@ -457,6 +457,18 @@ VALUES
     (1, 'Welcome to My Blog', '2024-01-15', '<p>This is my first post, sharing thoughts on my career so far.</p>', 'career,intro', 'A quick introduction post.', 'published', 'default.webp', 'welcome-to-my-blog', 12),
     (1, 'Tips for a Great Resume', '2024-03-02', '<p>A few tips I have learned for building a standout resume.</p>', 'resume,tips', 'Practical resume-writing tips.', 'published', 'default.webp', 'tips-for-a-great-resume', 34);
 
+-- ---------------------------------------------------------------------
+-- pdf_imports
+-- Source: PDFtoCV/lib/PdfResumeImport.php (sql/migrations/2026_10_02_create_pdf_imports.sql)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pdf_imports (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- NOTE: no seed rows for resumes, photos, user_purchases, page_stats,
 -- user_statistics or email_tracking -- see the notes above each CREATE
 -- TABLE statement for why each was left empty.
