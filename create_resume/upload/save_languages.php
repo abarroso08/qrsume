@@ -14,7 +14,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     && $_POST['action'] === "save_languages_group") {
 
     if (!isset($_SESSION['id'])) {
-        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=6&error=unauthorized");
+        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=unauthorized");
         exit();
     }
 
@@ -68,14 +68,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     }
 
     if ($success) {
-        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=7");
+        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=6");
         exit();
     } else {
-        header("Location: &error=save_failed");
+        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=save_failed");
         exit();
     }
 
 } else {
-    header("Location: https://qrsume.com/create_resume/form_with_login.php?section=6&error=bad_request");
+    header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=bad_request");
     exit();
 }

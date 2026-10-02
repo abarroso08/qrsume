@@ -10,7 +10,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     header("Location: ../assets/login.php");
     exit();
 }
-$sectionNumber = isset($_GET['section']) ? (int) $_GET['section'] : 0;
+$sectionNumber = isset($_GET['section']) ? max(0, min(7, (int) $_GET['section'])) : 0;
 $prevSection = max(0, $sectionNumber - 1);
 $nextSection = $sectionNumber + 1;
 $isLastSection = ($sectionNumber == 7);
@@ -62,6 +62,32 @@ $photos = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
 $totalSections = 8; // from 0 to 7
 $progressPercent = intval(($sectionNumber + 1) / $totalSections * 100);
+
+// The steps in order; the key is the ?section= value
+$steps = [
+    0 => ['title' => 'Profile', 'icon' => 'bi-person-circle', 'hint' => 'Your name, job title and a short summary about you.'],
+    1 => ['title' => 'Contact', 'icon' => 'bi-envelope', 'hint' => 'How recruiters can reach you.'],
+    2 => ['title' => 'Education', 'icon' => 'bi-book', 'hint' => 'Degrees and courses, most recent first.'],
+    3 => ['title' => 'Experience', 'icon' => 'bi-briefcase', 'hint' => 'Jobs and internships, most recent first.'],
+    4 => ['title' => 'Skills', 'icon' => 'bi-lightbulb', 'hint' => 'Tools, technologies and strengths, one per entry.'],
+    5 => ['title' => 'Languages', 'icon' => 'bi-translate', 'hint' => 'The languages you speak and your level in each.'],
+    6 => ['title' => 'Projects', 'icon' => 'bi-star', 'hint' => 'Personal, academic or side projects worth showing.'],
+    7 => ['title' => 'Extra sections', 'icon' => 'bi-ui-checks', 'hint' => 'Anything else, such as certifications, awards or volunteering.'],
+];
+
+function stepHeading(array $steps, int $step): string
+{
+    return '<h2 class="mb-1">' . htmlspecialchars($steps[$step]['title']) . '</h2>'
+        . '<p class="text-muted mb-4">' . htmlspecialchars($steps[$step]['hint']) . '</p>';
+}
+
+// Error codes the save handlers send back
+$formErrors = [
+    'save_failed' => 'Your changes could not be saved. Please try again.',
+    'bad_request' => 'Something went wrong while saving. Please try again.',
+    'unauthorized' => 'Your session has expired. Please log in again.',
+];
+$formError = $formErrors[$_GET['error'] ?? ''] ?? null;
 ?>
 <style>
   body {
@@ -143,6 +169,70 @@ $progressPercent = intval(($sectionNumber + 1) / $totalSections * 100);
     --font-base: 8px;
     /* Reduced from 12px */
   }
+  .active-step {
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1d4ed8 !important;
+  }
+
+  .is-example {
+    background-color: #fffbeb !important;
+    border-color: #fcd34d !important;
+  }
+
+  .example-badge {
+    margin-left: .4rem;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: .7rem;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+
+  .entry-removed-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+    padding: .6rem .9rem;
+    color: #6b7280;
+    font-size: .9rem;
+  }
+
+  .is-removed > :not(.entry-removed-bar) {
+    display: none !important;
+  }
+
+  .preview-caption {
+    font-size: 11px;
+  }
+
+  .preview-toggle {
+    display: none;
+  }
+
+  /* Phones: the floating preview covered the fields, so it opens on demand */
+  @media (max-width: 768px) {
+    .resume-container:not(.is-open) {
+      display: none;
+    }
+
+    .preview-toggle {
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      z-index: 1051;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      border-radius: 999px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+    }
+
+  }
+
   .pdf-import-card {
     padding: 1rem 1.1rem;
     border: 1px solid #bfdbfe;
@@ -210,71 +300,51 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
     font-family: 'Segoe UI', sans-serif;
 ">
     <div class="spinner-border text-primary mb-4" role="status" style="width: 3rem; height: 3rem;">
-      <span class="visually-hidden">Recollecting all your data...</span>
+      <span class="visually-hidden">Loading your resume…</span>
     </div>
-    <p id="loading-text" class="text-muted fs-5">Recollecting all your site data...</p>
+    <p id="loading-text" class="text-muted fs-5">Loading your resume…</p>
   </div>
  <?php include("../assets/nav_dashboard.php");?>
 
   <div class="" style="width:95vw;min-height:auto;">
-      <div class="progress my-2" style="height: 15px;">
-  <div class="progress-bar bg-success fw-semibold" role="progressbar" style="width: <?= $progressPercent ?>%;" aria-valuenow="<?= $progressPercent ?>" aria-valuemin="0" aria-valuemax="100">
-    <?= $progressPercent ?>%
-  </div>
-</div>
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+        <span class="fw-semibold">Step <?= $sectionNumber + 1 ?> of <?= $totalSections ?> · <?= htmlspecialchars($steps[$sectionNumber]['title']) ?></span>
+        <span class="text-muted small">Each step is saved when you press <strong>Save &amp; next</strong>.</span>
+      </div>
+      <div class="progress my-2" style="height: 8px;">
+        <div class="progress-bar bg-success" role="progressbar" style="width: <?= $progressPercent ?>%;" aria-valuenow="<?= $progressPercent ?>" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
 
     <div class="h-100 row g-4">
       <!-- Sidebar -->
       <div class="section-round col-lg-2 col-sm-6 col-md-4 col-12 d-none d-md-flex flex-column bg-white shadow p-2 h-100">
-        <h4 class="text-center mb-3">Menu</h4>
+        <h4 class="text-center mb-3">Steps</h4>
         <ul class="nav flex-column">
-          <li class="hover-highlight nav-item">
-            <a class="nav-link active fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php" data-section="0">
-              <i class="bi bi-person-circle me-2"></i> Profile
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=1" data-section="1">
-              <i class="bi bi-envelope me-2"></i> Contact
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=2" data-section="2">
-              <i class="bi bi-book me-2"></i> Education
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=3" data-section="3">
-              <i class="bi bi-briefcase me-2"></i> Experience
-            </a>
-          </li>
-          
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=4" data-section="5">
-              <i class="bi bi-lightbulb me-2"></i> Aptitudes
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=5" data-section="6">
-              <i class="bi bi-translate me-2"></i> Languages
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=6" data-section="4">
-              <i class="bi bi-star me-2"></i> Projects
-            </a>
-          </li>
-          <li class="hover-highlight nav-item">
-            <a class="nav-link fw-semibold text-dark" href="https://qrsume.com/create_resume/form_with_login.php?section=7" data-section="7">
-              <i class="bi bi-ui-checks me-2"></i> Custom Sections
-            </a>
-          </li>
+          <?php foreach ($steps as $number => $step): ?>
+            <li class="hover-highlight nav-item">
+              <a class="nav-link fw-semibold <?= $number === $sectionNumber ? 'active-step' : 'text-dark' ?>"
+                 href="https://qrsume.com/create_resume/form_with_login.php?section=<?= $number ?>"
+                 <?= $number === $sectionNumber ? 'aria-current="step"' : '' ?>>
+                <i class="bi <?= $step['icon'] ?> me-2"></i> <?= htmlspecialchars($step['title']) ?>
+              </a>
+            </li>
+          <?php endforeach; ?>
         </ul>
       </div>
 
       <!-- Main Content -->
       <div class="col-12 col-lg-6 col-md-8 position-relative" style="height:80%;">
         <div class="bg-white shadow section-round-top p-4 w-100 h-100" id="sectionWrapper" style="">
+          <?php if ($formError): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              <?= htmlspecialchars($formError) ?>
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          <?php endif; ?>
+          <div class="alert alert-warning small d-none" id="exampleNotice" role="status">
+            <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>
+            Fields highlighted in yellow still have <strong>example text</strong>. Replace it with your own details, or delete the examples you don't need.
+          </div>
           <!-- Section 0: Personal Info -->
 <section class="form-section <?= $sectionNumber === 0 ? '' : 'd-none' ?>" id="section-0">
     <!-- Fill the form from a CV in PDF -->
@@ -338,7 +408,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <h2>Personal Information</h2>
+    <?= stepHeading($steps, 0) ?>
     <div id="photo-upload-status"></div>
 
     <?php if (isset($_GET['success_profile'])): ?>
@@ -366,26 +436,27 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
         
         <div class="mb-3">
-          <label class="form-label">Name</label>
-          <input type="text" name="personal_name" class="form-control" required
+          <label class="form-label fw-semibold">First name <span class="text-danger">*</span></label>
+          <input type="text" name="personal_name" class="form-control" required autocomplete="given-name"
             value="<?= htmlspecialchars($personalinfo['personal_name'] ?? '') ?>">
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Last Name</label>
-          <input type="text" name="personal_lastname" class="form-control" required
+          <label class="form-label fw-semibold">Last name <span class="text-danger">*</span></label>
+          <input type="text" name="personal_lastname" class="form-control" required autocomplete="family-name"
             value="<?= htmlspecialchars($personalinfo['personal_lastname'] ?? '') ?>">
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Profession <span class="text-muted text-small">(For online resume, you can leave it blank)</span></label>
-          <input type="text" name="personal_profession" class="form-control"
+          <label class="form-label fw-semibold">Job title or headline <span class="text-muted fw-normal small">(optional)</span></label>
+          <input type="text" name="personal_profession" class="form-control" placeholder="e.g., Software Engineer"
             value="<?= htmlspecialchars($personalinfo['personal_profession'] ?? '') ?>">
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Bio <span class="text-muted text-small">(For online resume, you can leave it blank)</span></label>
-          <textarea name="personal_bio" class="form-control" rows="4"><?= htmlspecialchars($personalinfo['personal_bio'] ?? '') ?></textarea>
+          <label class="form-label fw-semibold">About you <span class="text-muted fw-normal small">(optional)</span></label>
+          <div class="form-text mt-0 mb-1">Two or three sentences shown at the top of your resume.</div>
+          <textarea name="personal_bio" class="form-control" rows="4" placeholder="e.g., Engineer with 5 years of experience building web apps. I enjoy turning complex problems into simple products."><?= htmlspecialchars($personalinfo['personal_bio'] ?? '') ?></textarea>
         </div>
 
         <input type="hidden" name="cv_url" value="<?= htmlspecialchars($personalinfo['cv_url'] ?? '') ?>">
@@ -435,82 +506,58 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
           <!-- Contact Info -->
           <div class="form-section <?= $sectionNumber === 1 ? '' : 'd-none' ?>" id="section-1">
-            <h2 class="mb-4">Contact Information</h2>
+            <?= stepHeading($steps, 1) ?>
             <form id="form-1" method="post" action="https://qrsume.com/create_resume/upload/save_contactinfo.php">
               <input type="hidden" name="action" value="save_contactinfo">
               <input type="hidden" name="user_id" value="<?= $_SESSION['id'] ?? '' ?>">
               <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label for="phone_number" class="form-label fw-semibold">
-                    Phone 
-                    <input type="checkbox" name="visibility[phone_number]" value="1"
-                        <?= (!isset($visibility['phone']) || $visibility['phone'] == 0) ? 'checked' : '' ?>
-                      class="form-check-input ms-2" title="Make public">
-                      <!-- Phone label with warning and collapsible advice -->
-                        <label for="visible_phone" class="form-text text-muted mb-0" style="font-size:12px;">
-                          Hide phone in website
-                           <i class="bi bi-exclamation-triangle-fill text-warning" data-bs-toggle="collapse" href="#phoneWarning" role="button" aria-expanded="false" aria-controls="phoneWarning"></i>
-                        </label>
-                        
-                        <!-- Collapsible warning message -->
-                        <div class="collapse mt-1" id="phoneWarning">
-                          <div class="card card-body text-muted" style="font-size: 12px;">
-                            Checking this box hides your phone number in the public website. <br> <strong>But it is still visible in the resume.</strong>
-                            We recommend keeping it hidden online to avoid exposing your personal contact details to potential misuse.
-                          </div>
-                        </div>
-                  </label>
-                  <input type="text" id="phone_number" name="phone_number" class="form-control"
+                  <label for="phone_number" class="form-label fw-semibold">Phone</label>
+                  <input type="tel" id="phone_number" name="phone_number" class="form-control" autocomplete="tel" placeholder="e.g., +34 600 000 000"
                     value="<?= htmlspecialchars($results['contactinfo'][0]['phone_number'] ?? '') ?>">
+                  <div class="form-check mt-1">
+                    <input type="checkbox" class="form-check-input" id="hide_phone" name="visibility[phone_number]" value="1"
+                      <?= (!isset($visibility['phone']) || $visibility['phone'] == 0) ? 'checked' : '' ?>>
+                    <label class="form-check-label small text-muted" for="hide_phone">Hide on my public web page (recommended). It still appears on your PDF resume.</label>
+                  </div>
                 </div>
-                
-                <div class="col-md-6 mb-3">
-                  <label for="email" class="form-label fw-semibold">
-                    Email
-                    <input type="checkbox" name="visibility[email]" value="1"
-                      <?= (!isset($visibility['email']) || $visibility['email'] == 0) ? 'checked' : '' ?>
-                      class="form-check-input ms-2" title="Make public">
-                      <!-- Email label with warning icon and collapsible info -->
-                        <label for="visible_email" class="form-text text-muted mb-0" style="font-size:12px;">
-                            Hide email in website
-                          <i class="bi bi-exclamation-triangle-fill text-warning" data-bs-toggle="collapse" href="#emailWarning" role="button" aria-expanded="false" aria-controls="emailWarning"></i>
-                          
-                        </label>
-                        
-                        <!-- Collapsible warning message -->
-                        <div class="collapse mt-1" id="emailWarning">
-                          <div class="card card-body text-muted" style="font-size: 12px;">
-                            Making your email public means it will be visible on your website. <br>
-                            <strong>We recommend keeping it private</strong> to reduce the risk of spam or unsolicited messages. <br>
-                            It will still appear in your downloadable resume.
-                          </div>
-                        </div>
 
-                  </label>
-                  <input type="email" id="email" name="email" class="form-control"
+                <div class="col-md-6 mb-3">
+                  <label for="email" class="form-label fw-semibold">Email</label>
+                  <input type="email" id="email" name="email" class="form-control" autocomplete="email" placeholder="e.g., name@example.com"
                     value="<?= htmlspecialchars($results['contactinfo'][0]['email'] ?? '') ?>">
+                  <div class="form-check mt-1">
+                    <input type="checkbox" class="form-check-input" id="hide_email" name="visibility[email]" value="1"
+                      <?= (!isset($visibility['email']) || $visibility['email'] == 0) ? 'checked' : '' ?>>
+                    <label class="form-check-label small text-muted" for="hide_email">Hide on my public web page (recommended, avoids spam). It still appears on your PDF resume.</label>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <p class="fw-semibold mb-1 mt-2">Online profiles <span class="text-muted fw-normal small">(optional)</span></p>
+                  <p class="form-text mt-0 mb-2">Paste the link to each profile. They are shown on your public web page.</p>
                 </div>
 
                 <div class="col-md-6 mb-3">
-                  <label for="github" class="form-label fw-semibold">GitHub <span class="text-muted text-small">(For online resume, you can leave it blank)</span></label>
+                  <label for="github" class="form-label fw-semibold">GitHub</label>
                   <input type="url" id="github" name="github" class="form-control"
-                    placeholder="https://" value="<?= htmlspecialchars($results['contactinfo'][0]['github'] ?? 'https://') ?>">
+                    placeholder="https://github.com/yourname" value="<?= htmlspecialchars($results['contactinfo'][0]['github'] ?? '') ?>">
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="facebook" class="form-label fw-semibold">Facebook <span class="text-muted text-small">(For online resume, you can leave it blank)</span></label>
+                  <label for="facebook" class="form-label fw-semibold">Facebook</label>
                   <input type="url" id="facebook" name="facebook" class="form-control"
-                    placeholder="https://" value="<?= htmlspecialchars($results['contactinfo'][0]['facebook'] ?? '') ?>">
+                    placeholder="https://facebook.com/yourname" value="<?= htmlspecialchars($results['contactinfo'][0]['facebook'] ?? '') ?>">
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="linkedin" class="form-label fw-semibold">LinkedIn <span class="text-muted text-small">(For online resume, you can leave it blank)</span></label>
+                  <label for="linkedin" class="form-label fw-semibold">LinkedIn</label>
                   <input type="url" id="linkedin" name="linkedin" class="form-control"
-                    placeholder="https://" value="<?= htmlspecialchars($results['contactinfo'][0]['linkedin'] ?? '') ?>">
+                    placeholder="https://linkedin.com/in/yourname" value="<?= htmlspecialchars($results['contactinfo'][0]['linkedin'] ?? '') ?>">
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label for="twitter" class="form-label fw-semibold">Twitter <span class="text-muted text-small">(For online resume, you can leave it blank)</span></label>
+                  <label for="twitter" class="form-label fw-semibold">X (Twitter)</label>
                   <input type="url" id="twitter" name="twitter" class="form-control"
-                    placeholder="https://" value="<?= htmlspecialchars($results['contactinfo'][0]['twitter'] ?? '') ?>">
+                    placeholder="https://x.com/yourname" value="<?= htmlspecialchars($results['contactinfo'][0]['twitter'] ?? '') ?>">
                 </div>
               </div>
             </form>
@@ -518,8 +565,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
           <!-- Education Section -->
           <div class="form-section <?= $sectionNumber === 2 ? '' : 'd-none' ?>" id="section-2">
-            <h2 class="mb-1">Education Information</h2>
-            <p class="text-muted mb-4">Add the name of your school, what degree you obtained, your field of study, and your graduation year.</p>
+            <?= stepHeading($steps, 2) ?>
 
             <form id="form-2" action="https://qrsume.com/create_resume/upload/save_education.php" method="POST">
               <input type="hidden" name="action" value="save_educationinfo_group">
@@ -551,19 +597,19 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
                           <div class="row">
 
                             <div class="col-md-8 mb-3">
-                              <label class="form-label fw-semibold">Name of Studies</label>
-                              <input type="text" class="form-control" name="name_of_studies[]" value="<?= htmlspecialchars($edu['name_of_studies'] ?? '') ?>">
+                              <label class="form-label fw-semibold">Degree or course</label>
+                              <input type="text" class="form-control" name="name_of_studies[]" placeholder="e.g., BSc in Computer Science" value="<?= htmlspecialchars($edu['name_of_studies'] ?? '') ?>">
                             </div>
                             <div class="col-md-4 mb-3">
-                              <label class="form-label fw-semibold">Date</label>
+                              <label class="form-label fw-semibold">Dates</label>
                               <input type="text" class="form-control" name="date[]" value="<?= htmlspecialchars($edu['date'] ?? '') ?>" placeholder="e.g., 2020–2022">
                             </div>
                             <div class="col-md-12 mb-3">
-                              <label class="form-label fw-semibold">Place of Study</label>
-                              <input type="text" class="form-control" name="place_of_study[]" value="<?= htmlspecialchars($edu['place_of_study'] ?? '') ?>">
+                              <label class="form-label fw-semibold">School or university</label>
+                              <input type="text" class="form-control" name="place_of_study[]" placeholder="e.g., University of Valencia" value="<?= htmlspecialchars($edu['place_of_study'] ?? '') ?>">
                             </div>
                             <div class="col-md-12 mb-3">
-                              <label class="form-label fw-semibold">Brief Description</label>
+                              <label class="form-label fw-semibold">Description <span class="text-muted fw-normal small">(optional)</span></label>
                               <textarea class="form-control" name="brief_description[]"><?= htmlspecialchars($edu['brief_description'] ?? '') ?></textarea>
                             </div>
                           </div>
@@ -575,13 +621,8 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
               </div>
 
               <!-- Add New Button -->
-              <?php if (count($results['education']) < 5): ?>
-                <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-education-btn">
-                  + Add New Education
-                </button>
-              <?php else: ?>
-                <p class="text-danger text-center mt-3">❌ You have reached the maximum of 5 education entries.</p>
-              <?php endif; ?>
+              <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-education-btn">+ Add education</button>
+      <p class="list-limit-note small text-muted text-center mb-3 d-none"></p>
 
             </form>
           </div>
@@ -594,7 +635,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
                 <h5 class="mb-0 fw-semibold fs-6">Untitled Education</h5>
                 <i class="bi bi-chevron-down transition"></i>
               </div>
-              <div class="collapse fs-6">
+              <div class="collapse show fs-6">
                 <div class="p-3 position-relative">
                   <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 delete-edu-btn" title="Delete this entry">
                     <i class="bi bi-trash3"></i>
@@ -604,19 +645,19 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
                   <div class="row">
                     <div class="col-md-8 mb-3">
-                      <label class="form-label fw-semibold">Name of Studies</label>
-                      <input type="text" class="form-control" name="name_of_studies[]">
+                      <label class="form-label fw-semibold">Degree or course</label>
+                      <input type="text" class="form-control" name="name_of_studies[]" placeholder="e.g., BSc in Computer Science">
                     </div>
                     <div class="col-md-4 mb-3">
-                      <label class="form-label fw-semibold">Date</label>
+                      <label class="form-label fw-semibold">Dates</label>
                       <input type="text" class="form-control" name="date[]" placeholder="e.g., 2020–2022">
                     </div>
                     <div class="col-md-12 mb-3">
-                      <label class="form-label fw-semibold">Place of Study</label>
-                      <input type="text" class="form-control" name="place_of_study[]">
+                      <label class="form-label fw-semibold">School or university</label>
+                      <input type="text" class="form-control" name="place_of_study[]" placeholder="e.g., University of Valencia">
                     </div>
                     <div class="col-md-12 mb-3">
-                      <label class="form-label fw-semibold">Brief Description</label>
+                      <label class="form-label fw-semibold">Description <span class="text-muted fw-normal small">(optional)</span></label>
                       <textarea class="form-control" name="brief_description[]"></textarea>
                     </div>
                   </div>
@@ -627,7 +668,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
           <!-- Work Experience -->
           <div class="form-section <?= $sectionNumber === 3 ? '' : 'd-none' ?>" id="section-3">
-            <h2 class="mb-4">Work Experience</h2>
+            <?= stepHeading($steps, 3) ?>
 
             <form id="form-3" action="https://qrsume.com/create_resume/upload/save_experience.php" method="POST">
               <input type="hidden" name="action" value="save_experienceinfo_group">
@@ -654,19 +695,19 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
                         </button>
                         <div class="row">
                           <div class="col-md-8 mb-3">
-                            <label class="form-label fw-semibold">Job Name</label>
-                            <input type="text" class="form-control" name="job_name[]" value="<?= htmlspecialchars($job['job_name'] ?? '') ?>">
+                            <label class="form-label fw-semibold">Job title</label>
+                            <input type="text" class="form-control" name="job_name[]" placeholder="e.g., Marketing Manager" value="<?= htmlspecialchars($job['job_name'] ?? '') ?>">
                           </div>
                           <div class="col-md-4 mb-3">
-                            <label class="form-label fw-semibold">Date</label>
+                            <label class="form-label fw-semibold">Dates</label>
                             <input type="text" class="form-control" name="date[]" value="<?= htmlspecialchars($job['date'] ?? '') ?>" placeholder="e.g., 2022–Present">
                           </div>
                           <div class="col-md-12 mb-3">
-                            <label class="form-label fw-semibold">Place of Work</label>
-                            <input type="text" class="form-control" name="place_of_work[]" value="<?= htmlspecialchars($job['place_of_work'] ?? '') ?>">
+                            <label class="form-label fw-semibold">Company</label>
+                            <input type="text" class="form-control" name="place_of_work[]" placeholder="e.g., Acme Inc., Madrid" value="<?= htmlspecialchars($job['place_of_work'] ?? '') ?>">
                           </div>
                           <div class="col-md-12 mb-3">
-                            <label class="form-label fw-semibold">Brief Description</label>
+                            <label class="form-label fw-semibold">Description <span class="text-muted fw-normal small">(optional)</span></label>
                             <textarea class="form-control" name="brief_description[]"><?= htmlspecialchars($job['brief_description'] ?? '') ?></textarea>
                           </div>
                         </div>
@@ -676,13 +717,8 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
                 <?php endif; ?>
               </div>
 
-              <?php if (count($results['experience']) < 5): ?>
-                <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-experience-btn">
-                  + Add New Work Experience
-                </button>
-              <?php else: ?>
-                <p class="text-danger text-center mt-3">❌ You have reached the maximum of 5 work experience entries.</p>
-              <?php endif; ?>
+              <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-experience-btn">+ Add work experience</button>
+      <p class="list-limit-note small text-muted text-center mb-3 d-none"></p>
             </form>
           </div>
 
@@ -705,19 +741,19 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
                 </button>
                 <div class="row">
                   <div class="col-md-8 mb-3">
-                    <label class="form-label fw-semibold">Job Name</label>
-                    <input type="text" class="form-control" name="job_name[]">
+                    <label class="form-label fw-semibold">Job title</label>
+                    <input type="text" class="form-control" name="job_name[]" placeholder="e.g., Marketing Manager">
                   </div>
                   <div class="col-md-4 mb-3">
-                    <label class="form-label fw-semibold">Date</label>
+                    <label class="form-label fw-semibold">Dates</label>
                     <input type="text" class="form-control" name="date[]" placeholder="e.g., 2022–Present">
                   </div>
                   <div class="col-md-12 mb-3">
-                    <label class="form-label fw-semibold">Place of Work</label>
-                    <input type="text" class="form-control" name="place_of_work[]">
+                    <label class="form-label fw-semibold">Company</label>
+                    <input type="text" class="form-control" name="place_of_work[]" placeholder="e.g., Acme Inc., Madrid">
                   </div>
                   <div class="col-md-12 mb-3">
-                    <label class="form-label fw-semibold">Brief Description</label>
+                    <label class="form-label fw-semibold">Description <span class="text-muted fw-normal small">(optional)</span></label>
                     <textarea class="form-control" name="brief_description[]"></textarea>
                   </div>
                 </div>
@@ -728,7 +764,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
           <!-- Projects -->
 <div class="form-section <?= $sectionNumber === 6 ? '' : 'd-none' ?>" id="section-4">
-  <h2 class="mb-4">Projects</h2>
+  <?= stepHeading($steps, 6) ?>
 
   <form id="form-4" action="https://qrsume.com/create_resume/upload/save_projects.php" method="POST">
     <input type="hidden" name="action" value="save_projects_group">
@@ -756,11 +792,11 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
             </button>
               <div class="row">
                 <div class="col-md-12 mb-3">
-                  <label class="form-label fw-semibold">Project Name</label>
-                  <input type="text" class="form-control" name="interest[]" value="<?= htmlspecialchars($interest['interest'] ?? '') ?>">
+                  <label class="form-label fw-semibold">Project name</label>
+                  <input type="text" class="form-control" name="interest[]" placeholder="e.g., Personal website" value="<?= htmlspecialchars($interest['interest'] ?? '') ?>">
                 </div>
                 <div class="col-md-12 mb-3">
-                  <label class="form-label fw-semibold">Description</label>
+                  <label class="form-label fw-semibold">Description <span class="text-muted fw-normal small">(optional)</span></label>
                   <textarea class="form-control" name="description[]"><?= htmlspecialchars($interest['description'] ?? '') ?></textarea>
                 </div>
               </div>
@@ -770,13 +806,8 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <?php if (count($results['interests']) < 10): ?>
-      <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-project-btn">
-        + Add New Project
-      </button>
-    <?php else: ?>
-      <p class="text-danger text-center mt-3">❌ You have reached the maximum of 5 projects.</p>
-    <?php endif; ?>
+    <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-project-btn">+ Add a project</button>
+      <p class="list-limit-note small text-muted text-center mb-3 d-none"></p>
   </form>
 </div>
 
@@ -799,12 +830,12 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <i class="bi bi-trash3"></i>
     </button>
       <div class="row">
-        <div class="col-md-6 mb-3">
-          <label class="form-label fw-semibold">Project Name</label>
-          <input type="text" class="form-control" name="interest[]">
+        <div class="col-md-12 mb-3">
+          <label class="form-label fw-semibold">Project name</label>
+          <input type="text" class="form-control" name="interest[]" placeholder="e.g., Personal website">
         </div>
-        <div class="col-md-6 mb-3">
-          <label class="form-label fw-semibold">Description</label>
+        <div class="col-md-12 mb-3">
+          <label class="form-label fw-semibold">Description <span class="text-muted fw-normal small">(optional)</span></label>
           <textarea class="form-control" name="description[]"></textarea>
         </div>
       </div>
@@ -815,7 +846,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
           <!-- Aptitudes -->
 <div class="form-section <?= $sectionNumber === 4 ? '' : 'd-none' ?>" id="section-5">
-  <h2 class="mb-4">Aptitudes</h2>
+  <?= stepHeading($steps, 4) ?>
 
   <form id="form-5" action="https://qrsume.com/create_resume/upload/save_aptitudes.php" method="POST">
     <input type="hidden" name="action" value="save_aptitudes_group">
@@ -835,14 +866,14 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
             <div class="d-flex justify-content-between align-items-center p-3 bg-light"
               data-bs-toggle="collapse" data-bs-target="#aptitude-collapse-<?= $index ?>" role="button">
-              <h5 class="mb-0 fw-semibold">🧠 <?= htmlspecialchars($apt['aptitude'] ?? 'Untitled Aptitude') ?></h5>
+              <h5 class="mb-0 fw-semibold">🧠 <?= htmlspecialchars($apt['aptitude'] ?? 'Untitled skill') ?></h5>
               <i class="bi bi-chevron-down transition"></i>
             </div>
 
             <div class="collapse show p-3" id="aptitude-collapse-<?= $index ?>">
               <div class="mb-3">
-                <label class="form-label fw-semibold">Aptitude</label>
-                <input type="text" class="form-control" name="aptitude[]" value="<?= htmlspecialchars($apt['aptitude'] ?? '') ?>">
+                <label class="form-label fw-semibold">Skill</label>
+                <input type="text" class="form-control" name="aptitude[]" placeholder="e.g., Project management" value="<?= htmlspecialchars($apt['aptitude'] ?? '') ?>">
               </div>
             </div>
           </div>
@@ -850,13 +881,8 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <?php if (count($results['aptitudes']) < 10): ?>
-      <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-aptitude-btn">
-        + Add New Aptitude
-      </button>
-    <?php else: ?>
-      <p class="text-danger text-center mt-3">❌ You have reached the maximum of 5 aptitudes.</p>
-    <?php endif; ?>
+    <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-aptitude-btn">+ Add a skill</button>
+      <p class="list-limit-note small text-muted text-center mb-3 d-none"></p>
   </form>
 </div>
 
@@ -872,14 +898,14 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
     <div class="d-flex justify-content-between align-items-center p-3 bg-light"
       data-bs-toggle="collapse" data-bs-target="" role="button">
-      <h5 class="mb-0 fw-semibold">🧠 Untitled Aptitude</h5>
+      <h5 class="mb-0 fw-semibold">🧠 Untitled skill</h5>
       <i class="bi bi-chevron-down transition"></i>
     </div>
 
     <div class="collapse show p-3">
       <div class="mb-3">
-        <label class="form-label fw-semibold">Aptitude</label>
-        <input type="text" class="form-control" name="aptitude[]">
+        <label class="form-label fw-semibold">Skill</label>
+        <input type="text" class="form-control" name="aptitude[]" placeholder="e.g., Project management">
       </div>
     </div>
   </div>
@@ -888,7 +914,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
          <!-- Languages -->
 <div class="form-section <?= $sectionNumber === 5 ? '' : 'd-none' ?>" id="section-6">
-  <h2 class="mb-4">Languages</h2>
+  <?= stepHeading($steps, 5) ?>
 
   <form id="form-6" action="https://qrsume.com/create_resume/upload/save_languages.php" method="POST">
     <input type="hidden" name="action" value="save_languages_group">
@@ -916,11 +942,11 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label class="form-label fw-semibold">Language</label>
-                  <input type="text" class="form-control" name="language[]" value="<?= htmlspecialchars($lang['language'] ?? '') ?>">
+                  <input type="text" class="form-control" name="language[]" placeholder="e.g., English" value="<?= htmlspecialchars($lang['language'] ?? '') ?>">
                 </div>
                 <div class="col-md-6 mb-3">
                   <label class="form-label fw-semibold">Level</label>
-                  <input type="text" class="form-control" name="level[]" value="<?= htmlspecialchars($lang['level'] ?? '') ?>">
+                  <input type="text" class="form-control" name="level[]" list="language-levels" placeholder="e.g., Native, C1, Intermediate" value="<?= htmlspecialchars($lang['level'] ?? '') ?>">
                 </div>
               </div>
             </div>
@@ -929,16 +955,16 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <?php if (count($results['languages']) < 5): ?>
-      <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-language-btn">
-        + Add New Language
-      </button>
-    <?php else: ?>
-      <p class="text-danger text-center mt-3">❌ You have reached the maximum of 5 languages.</p>
-    <?php endif; ?>
+    <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-language-btn">+ Add a language</button>
+      <p class="list-limit-note small text-muted text-center mb-3 d-none"></p>
 
   </form>
 </div>
+
+<datalist id="language-levels">
+  <option value="Native"><option value="Fluent"><option value="C2"><option value="C1"><option value="B2">
+  <option value="B1"><option value="A2"><option value="A1"><option value="Intermediate"><option value="Basic">
+</datalist>
 
 <!-- Template for new language -->
 <template id="language-template">
@@ -960,11 +986,11 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <div class="row">
         <div class="col-md-6 mb-3">
           <label class="form-label fw-semibold">Language</label>
-          <input type="text" class="form-control" name="language[]">
+          <input type="text" class="form-control" name="language[]" placeholder="e.g., English">
         </div>
         <div class="col-md-6 mb-3">
           <label class="form-label fw-semibold">Level</label>
-          <input type="text" class="form-control" name="level[]">
+          <input type="text" class="form-control" name="level[]" list="language-levels" placeholder="e.g., Native, C1, Intermediate">
         </div>
       </div>
     </div>
@@ -974,7 +1000,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
           <!-- Custom Sections -->
 <div class="form-section <?= $sectionNumber === 7 ? '' : 'd-none' ?>" id="section-7">
-  <h2 class="mb-4">Custom Sections</h2>
+  <?= stepHeading($steps, 7) ?>
 
   <form id="form-7" action="https://qrsume.com/create_resume/upload/save_custom_sections.php" method="POST">
     <input type="hidden" name="action" value="save_custom_sections_group">
@@ -1000,11 +1026,11 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
             <div class="collapse show p-3" id="custom-collapse-<?= $index ?>">
               <div class="mb-3">
-                <label class="form-label fw-semibold">Section Title</label>
-                <input type="text" class="form-control" name="section_title[]" value="<?= htmlspecialchars($sections['section_title'] ?? '') ?>">
+                <label class="form-label fw-semibold">Section title</label>
+                <input type="text" class="form-control" name="section_title[]" placeholder="e.g., Certifications" value="<?= htmlspecialchars($sections['section_title'] ?? '') ?>">
               </div>
               <div class="mb-3">
-                <label class="form-label fw-semibold">Section Content</label>
+                <label class="form-label fw-semibold">Content</label>
                 <textarea class="form-control" name="section_content[]"><?= htmlspecialchars($sections['section_content'] ?? '') ?></textarea>
               </div>
             </div>
@@ -1013,13 +1039,8 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
       <?php endif; ?>
     </div>
 
-    <?php if (count($results['custom_sections']) < 5): ?>
-      <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-custom-btn">
-        + Add New Custom Section
-      </button>
-    <?php else: ?>
-      <p class="text-danger text-center mt-3">❌ You have reached the maximum of 5 custom sections.</p>
-    <?php endif; ?>
+    <button type="button" class="btn btn-outline-secondary w-100 mb-3" id="add-custom-btn">+ Add a section</button>
+      <p class="list-limit-note small text-muted text-center mb-3 d-none"></p>
 
   </form>
 </div>
@@ -1042,11 +1063,11 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
     <div class="collapse show p-3">
       <div class="mb-3">
-        <label class="form-label fw-semibold">Section Title</label>
-        <input type="text" class="form-control" name="section_title[]">
+        <label class="form-label fw-semibold">Section title</label>
+        <input type="text" class="form-control" name="section_title[]" placeholder="e.g., Certifications">
       </div>
       <div class="mb-3">
-        <label class="form-label fw-semibold">Section Content</label>
+        <label class="form-label fw-semibold">Content</label>
         <textarea class="form-control" name="section_content[]"></textarea>
       </div>
     </div>
@@ -1071,14 +1092,15 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
   style="border-radius: 999px; background-color: #2563eb;"
   id="nextBtn">
   <span id="nextBtnLabel">
-    <?= $isLastSection ? 'Download' : 'Save & Next' ?>
+    <?= $isLastSection ? 'Save &amp; preview my resume' : 'Save &amp; next' ?>
   </span>
-  <i class="bi <?= $isLastSection ? 'bi-download' : 'bi-chevron-right' ?> ms-1"></i>
+  <i class="bi <?= $isLastSection ? 'bi-eye' : 'bi-chevron-right' ?> ms-1"></i>
 </button>
         </div>
       </div>
 
-      <div class="col-12 col-lg-4 resume-container shadow" style="background: white; padding: 1.5rem; box-shadow: 0 0 8px rgba(0,0,0,0.1);">
+      <div class="col-12 col-lg-4 resume-container shadow" id="resumePreviewPanel" style="background: white; padding: 1.5rem; box-shadow: 0 0 8px rgba(0,0,0,0.1);">
+        <p class="preview-caption text-muted mb-2"><i class="bi bi-eye me-1" aria-hidden="true"></i>Preview · updates when you save a step</p>
 
         <!-- Profile and Contact (highlighted for sections 0 and 1) -->
         <div style="<?= in_array($sectionNumber, [0, 1]) ? $highlightStyle : '' ?>">
@@ -1140,7 +1162,7 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
         <?php if (!empty($results['aptitudes'])): ?>
           <div style="<?= $sectionNumber === 4 ? $highlightStyle : '' ?>">
             <div class="section-title" style="font-size: var(--font-section, 16px); font-weight: bold; margin-top: 0.4rem; margin-bottom: 0.3rem; border-bottom: 1px solid black;">
-              Aptitudes
+              Skills
             </div>
             <div class="row row-cols-2" style="font-size: var(--font-base, 12px);">
               <?php foreach ($results['aptitudes'] as $apt): ?>
@@ -1197,6 +1219,10 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
     </div>
   </div>
 
+  <button type="button" class="btn btn-dark btn-sm preview-toggle" id="previewToggle" aria-controls="resumePreviewPanel" aria-expanded="false">
+    <i class="bi bi-eye" aria-hidden="true"></i><span>Preview</span>
+  </button>
+
   <?php include("../assets/footer.php"); ?>
 
   <script>
@@ -1213,8 +1239,9 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
   if (!el.dataset.bulletAttached) { // prevent duplicate buttons
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'btn btn-sm btn-secondary mb-1';
-    button.innerHTML = '<i class="bi bi-list-ul"></i>';
+    button.className = 'btn btn-sm btn-outline-secondary mb-1 d-block';
+    button.innerHTML = '<i class="bi bi-list-ul me-1"></i>Make bullet points';
+    button.title = 'Start every line with a bullet point (•)';
 
     // Optional: assign unique ID
     if (!el.id && index !== null) {
@@ -1237,32 +1264,6 @@ overflow-y: visible; /* o auto / hidden / scroll según el comportamiento que qu
 
 document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll("textarea").forEach((el, i) => enhanceTextarea(el, i));
-
-  // === FORM TOGGLE MODULE ===
-  const formToggle = (() => {
-    const toggles = [
-      { buttonId: "add-experience-btn", formId: "new-experience-form" },
-      { buttonId: "add-interest-btn", formId: "new-interest-form" },
-      { buttonId: "add-aptitude-btn", formId: "new-aptitude-form" },
-      { buttonId: "add-language-btn", formId: "new-language-form" },
-    ];
-
-    const init = () => {
-      toggles.forEach(({ buttonId, formId }) => {
-        const btn = document.getElementById(buttonId);
-        const form = document.getElementById(formId);
-        if (btn && form) {
-          btn.addEventListener("click", () => {
-            form.style.display = "block";
-            btn.style.display = "none";
-          });
-        }
-      });
-    };
-
-    return { init };
-  })();
-
 
   // === PROFILE PHOTO PREVIEW (MODAL UPLOAD) MODULE ===
   const profilePhotoModalPreview = (() => {
@@ -1323,185 +1324,232 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
 
-  // === EDUCATION SECTION ===
-  let eduEntryCount = <?= count($results['education'] ?? []) ?>;
-  const maxEduEntries = 5;
-  const eduAddBtn = document.getElementById('add-education-btn');
-  const eduTemplate = document.getElementById('new-education-template');
-  const eduContainer = document.getElementById('education-entries');
+  // === LIST SECTIONS (education, experience, skills, languages, projects, extra sections) ===
+  // Limits match create_resume/upload/save_*.php and the PDF import.
+  const listSections = [
+    { container: 'education-entries', template: 'new-education-template', add: 'add-education-btn', entry: '.education-entry', remove: '.delete-edu-btn', max: 5, title: 'name_of_studies[]', untitled: 'Untitled education', limitText: 'education entries' },
+    { container: 'experience-entries', template: 'experience-template', add: 'add-experience-btn', entry: '.experience-entry', remove: '.delete-experience-btn', max: 5, title: 'job_name[]', untitled: 'Untitled experience', prefix: '💼 ', limitText: 'work experience entries' },
+    { container: 'aptitude-entries', template: 'aptitude-template', add: 'add-aptitude-btn', entry: '.aptitude-entry', remove: '.delete-aptitude-btn', max: 10, title: 'aptitude[]', untitled: 'Untitled skill', prefix: '🧠 ', limitText: 'skills' },
+    { container: 'language-entries', template: 'language-template', add: 'add-language-btn', entry: '.language-entry', remove: '.delete-language-btn', max: 5, title: 'language[]', untitled: 'Untitled language', prefix: '🌐 ', limitText: 'languages' },
+    { container: 'project-entries', template: 'project-template', add: 'add-project-btn', entry: '.project-entry', remove: '.delete-project-btn', max: 10, title: 'interest[]', untitled: 'Untitled project', prefix: '🚀 ', limitText: 'projects' },
+    { container: 'custom-section-entries', template: 'custom-template', add: 'add-custom-btn', entry: '.custom-section-entry', remove: '.delete-custom-btn', max: 5, title: 'section_title[]', untitled: 'Untitled section', prefix: '🧩 ', limitText: 'extra sections' },
+  ];
+  let newEntryNumber = 0;
 
-  if (eduAddBtn) {
-    eduAddBtn.addEventListener('click', function () {
-      if (eduEntryCount >= maxEduEntries) return;
-      const clone = eduTemplate.content.cloneNode(true);
-      const collapseId = 'edu-collapse-new-' + eduEntryCount;
-      clone.querySelector('[data-bs-toggle]').setAttribute('data-bs-target', '#' + collapseId);
-      clone.querySelector('.collapse').setAttribute('id', collapseId);
-      eduContainer.appendChild(clone);
-      eduEntryCount++;
-      
-    });
-    
-  }
+  listSections.forEach(list => {
+    const container = document.getElementById(list.container);
+    const template = document.getElementById(list.template);
+    const addButton = document.getElementById(list.add);
+    if (!container || !template) return;
 
-  eduContainer.addEventListener('click', function (e) {
-    if (e.target.closest('.delete-edu-btn')) {
-      const block = e.target.closest('.education-entry');
-      if (block) {
-        block.style.display = 'none';
-        const flag = block.querySelector('input[name="delete_flag[]"]');
-        if (flag) flag.value = 'true';
+    const limitNote = addButton ? addButton.nextElementSibling : null;
+    const activeEntries = () => [...container.querySelectorAll(list.entry)].filter(entry => !entry.classList.contains('is-removed'));
+
+    const updateLimit = () => {
+      if (!addButton) return;
+      const reached = activeEntries().length >= list.max;
+      addButton.disabled = reached;
+      addButton.classList.toggle('d-none', reached);
+      if (limitNote && limitNote.classList.contains('list-limit-note')) {
+        limitNote.textContent = `You can add up to ${list.max} ${list.limitText}. Remove one to add another.`;
+        limitNote.classList.toggle('d-none', !reached);
       }
+    };
+
+    // The entry header follows the main field as you type
+    const updateTitle = entry => {
+      const heading = entry.querySelector('[data-bs-toggle="collapse"] h5');
+      const field = entry.querySelector(`[name="${list.title}"]`);
+      if (!heading || !field) return;
+      const badge = heading.querySelector('.example-badge');
+      heading.textContent = (list.prefix || '') + (field.value.trim() || list.untitled);
+      if (badge) heading.appendChild(badge);
+    };
+
+    container.addEventListener('input', event => {
+      const entry = event.target.closest(list.entry);
+      if (entry && event.target.name === list.title) updateTitle(entry);
+    });
+
+    if (addButton) {
+      addButton.addEventListener('click', () => {
+        if (activeEntries().length >= list.max) return;
+
+        const clone = template.content.cloneNode(true);
+        const collapseId = `${list.container}-new-${newEntryNumber++}`;
+        clone.querySelector('[data-bs-toggle]').setAttribute('data-bs-target', '#' + collapseId);
+        clone.querySelector('.collapse').setAttribute('id', collapseId);
+        container.appendChild(clone);
+
+        const entry = container.querySelectorAll(list.entry)[container.querySelectorAll(list.entry).length - 1];
+        updateTitle(entry);
+        entry.querySelectorAll('textarea').forEach((el, i) => enhanceTextarea(el, `new-${newEntryNumber}-${i}`));
+        entry.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        entry.querySelector('input[type="text"], textarea')?.focus({ preventScroll: true });
+        markDirty();
+        updateLimit();
+      });
     }
+
+    container.addEventListener('click', event => {
+      const removeButton = event.target.closest(list.remove);
+      if (removeButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const entry = removeButton.closest(list.entry);
+        const idField = entry.querySelector('input[type="hidden"][name$="_id[]"]');
+
+        // Never saved: just take it out (the save handlers would insert it otherwise)
+        if (!idField || idField.value === '') {
+          entry.remove();
+        } else {
+          entry.querySelector('input[name="delete_flag[]"]').value = 'true';
+          entry.classList.add('is-removed');
+          const bar = document.createElement('div');
+          bar.className = 'entry-removed-bar';
+          bar.innerHTML = '<span><i class="bi bi-trash3 me-1"></i>This entry will be deleted when you save.</span>'
+            + '<button type="button" class="btn btn-sm btn-link p-0 undo-remove">Undo</button>';
+          entry.appendChild(bar);
+        }
+        markDirty();
+        updateLimit();
+        refreshExampleNotice();
+        return;
+      }
+
+      const undoButton = event.target.closest('.undo-remove');
+      if (undoButton) {
+        const entry = undoButton.closest(list.entry);
+        if (activeEntries().length >= list.max) return;
+        entry.querySelector('input[name="delete_flag[]"]').value = 'false';
+        entry.classList.remove('is-removed');
+        undoButton.closest('.entry-removed-bar').remove();
+        updateLimit();
+        refreshExampleNotice();
+      }
+    });
+
+    container.querySelectorAll(list.entry).forEach(updateTitle);
+    updateLimit();
   });
 
 
-  // === EXPERIENCE SECTION ===
-  let workEntryCount = <?= count($results['experience'] ?? []) ?>;
-  const maxWorkEntries = 5;
-  const workAddBtn = document.getElementById("add-experience-btn");
-  const workTemplate = document.getElementById("experience-template").content;
-  const workContainer = document.getElementById("experience-entries");
+  // === EXAMPLE TEXT FROM REGISTRATION ===
+  // New accounts start with sample content; highlight it so it is not mistaken for real data.
+  const exampleValues = new Set([
+    'Your Name', 'Your Last Name', 'Your Profession', 'This is a short bio about yourself.',
+    '123-456-7890', 'youremail@gmail.com', 'https://github.com/yourusername', 'https://linkedin.com/in/yourusername',
+    'https://twitter.com/yourusername', 'Your Degree', 'Your University, Your City',
+    'Studied various subjects related to your degree and participated in extracurricular activities.',
+    'Your Job Title', 'Your Company, Your City', 'Worked on various projects, improving skills in different areas.',
+    'Passionate about the latest tech trends.', 'Enjoys playing instruments and composing songs.',
+    'Loves exploring new cultures and destinations.',
+  ]);
+  const exampleSets = {
+    'aptitude[]': ['Communication', 'Leadership', 'Problem Solving', 'Teamwork'],
+    'language[]': ['English', 'French', 'Spanish'],
+  };
 
-  if (workAddBtn) {
-    workAddBtn.addEventListener("click", function () {
-      if (workEntryCount >= maxWorkEntries) return;
-      const clone = workTemplate.cloneNode(true);
-      const collapseId = "job-collapse-new-" + workEntryCount;
-      clone.querySelector('[data-bs-toggle]').setAttribute("data-bs-target", "#" + collapseId);
-      clone.querySelector('.collapse').setAttribute("id", collapseId);
-      workContainer.appendChild(clone);
-      workEntryCount++;
+  const markExample = field => {
+    field.classList.add('is-example');
+    const entry = field.closest('.education-entry, .experience-entry, .project-entry, .aptitude-entry, .language-entry, .custom-section-entry');
+    const heading = entry?.querySelector('[data-bs-toggle="collapse"] h5');
+    if (heading && !heading.querySelector('.example-badge')) {
+      heading.insertAdjacentHTML('beforeend', '<span class="example-badge">Example</span>');
+    }
+  };
+
+  document.querySelectorAll('#sectionWrapper form input[type="text"], #sectionWrapper form input[type="email"], #sectionWrapper form input[type="tel"], #sectionWrapper form input[type="url"], #sectionWrapper form textarea')
+    .forEach(field => {
+      if (exampleValues.has(field.value.trim())) markExample(field);
     });
-  }
 
-  workContainer.addEventListener("click", function (e) {
-    if (e.target.closest(".delete-experience-btn")) {
-      const entry = e.target.closest(".experience-entry");
-      entry.style.display = "none";
-      const flag = entry.querySelector('input[name="delete_flag[]"]');
-      if (flag) flag.value = "true";
+  // Sample entries: their other fields (dates, titles) are examples too
+  document.querySelectorAll('.education-entry, .experience-entry, .project-entry').forEach(entry => {
+    if (entry.querySelector('.is-example')) {
+      entry.querySelectorAll('input[type="text"], textarea').forEach(markExample);
     }
   });
 
-
-  // === PROJECT SECTION ===
-  const projectContainer = document.getElementById("project-entries");
-  const projectTemplate = document.getElementById("project-template").content;
-  const maxProjects = 5;
-  let projectCount = projectContainer.children.length;
-
-  const addProjectBtn = document.getElementById("add-project-btn");
-  if (addProjectBtn) {
-    addProjectBtn.addEventListener("click", function () {
-      if (projectCount >= maxProjects) return;
-      const clone = projectTemplate.cloneNode(true);
-      const collapseId = "interest-collapse-new-" + projectCount;
-      clone.querySelector('[data-bs-toggle]').setAttribute("data-bs-target", "#" + collapseId);
-      clone.querySelector('.collapse').setAttribute("id", collapseId);
-      projectContainer.appendChild(clone);
-      projectCount++;
-    });
-  }
-
-  projectContainer.addEventListener("click", function (e) {
-    if (e.target.closest(".delete-project-btn")) {
-      const block = e.target.closest(".project-entry");
-      block.style.display = "none";
-      const flag = block.querySelector('input[name="delete_flag[]"]');
-      if (flag) flag.value = "true";
+  // Skills and languages: only when they are exactly the sample list
+  Object.entries(exampleSets).forEach(([name, sample]) => {
+    const fields = [...document.querySelectorAll(`[name="${name}"]`)].filter(field => !field.closest('template'));
+    const values = fields.map(field => field.value.trim()).sort();
+    if (fields.length && JSON.stringify(values) === JSON.stringify(sample)) {
+      fields.forEach(field => {
+        markExample(field);
+        field.closest('.language-entry')?.querySelector('[name="level[]"]') && markExample(field.closest('.language-entry').querySelector('[name="level[]"]'));
+      });
     }
   });
 
-
-  // === APTITUDE SECTION ===
-  const aptitudeContainer = document.getElementById("aptitude-entries");
-  const aptitudeTemplate = document.getElementById("aptitude-template").content;
-  const maxAptitudes = 5;
-  let aptitudeCount = aptitudeContainer.children.length;
-
-  const addAptitudeBtn = document.getElementById("add-aptitude-btn");
-  if (addAptitudeBtn) {
-    addAptitudeBtn.addEventListener("click", function () {
-      if (aptitudeCount >= maxAptitudes) return;
-      const clone = aptitudeTemplate.cloneNode(true);
-      const collapseId = "aptitude-collapse-new-" + aptitudeCount;
-      clone.querySelector('[data-bs-toggle]').setAttribute("data-bs-target", "#" + collapseId);
-      clone.querySelector('.collapse').setAttribute("id", collapseId);
-      aptitudeContainer.appendChild(clone);
-      aptitudeCount++;
-    });
+  function refreshExampleNotice() {
+    const visibleSection = document.querySelector('.form-section:not(.d-none)');
+    const hasExamples = !!visibleSection && [...visibleSection.querySelectorAll('.is-example')]
+      .some(field => !field.closest('.is-removed'));
+    document.getElementById('exampleNotice')?.classList.toggle('d-none', !hasExamples);
   }
 
-  aptitudeContainer.addEventListener("click", function (e) {
-    if (e.target.closest(".delete-aptitude-btn")) {
-      const block = e.target.closest(".aptitude-entry");
-      block.style.display = "none";
-      const flag = block.querySelector('input[name="delete_flag[]"]');
-      if (flag) flag.value = "true";
-    }
+  document.addEventListener('focusin', event => {
+    if (event.target.classList?.contains('is-example')) event.target.select();
+  });
+
+  document.addEventListener('input', event => {
+    if (!event.target.classList?.contains('is-example')) return;
+    event.target.classList.remove('is-example');
+    const entry = event.target.closest('.education-entry, .experience-entry, .project-entry, .aptitude-entry, .language-entry, .custom-section-entry');
+    if (entry && !entry.querySelector('.is-example')) entry.querySelector('.example-badge')?.remove();
+    refreshExampleNotice();
+  });
+
+  refreshExampleNotice();
+
+
+  // === PHONES: show or hide the floating preview ===
+  const previewToggle = document.getElementById('previewToggle');
+  const previewPanel = document.getElementById('resumePreviewPanel');
+  previewToggle?.addEventListener('click', () => {
+    const open = !previewPanel.classList.contains('is-open');
+    previewPanel.classList.toggle('is-open', open);
+    previewToggle.classList.toggle('is-open', open);
+    previewToggle.setAttribute('aria-expanded', String(open));
+    previewToggle.querySelector('span').textContent = open ? 'Hide preview' : 'Preview';
+    // Sit just above the (scaled) preview while it is open
+    previewToggle.style.bottom = open ? `${window.innerHeight - previewPanel.getBoundingClientRect().top + 8}px` : '';
   });
 
 
-  // === LANGUAGE SECTION ===
-  const lanContainer = document.getElementById("language-entries");
-  const lanTemplate = document.getElementById("language-template").content;
-  const maxLanguages = 5;
-  let lanCount = lanContainer.children.length;
-
-  const lanAddBtn = document.getElementById("add-language-btn");
-  if (lanAddBtn) {
-    lanAddBtn.addEventListener("click", function () {
-      if (lanCount >= maxLanguages) return;
-      const clone = lanTemplate.cloneNode(true);
-      const collapseId = "language-collapse-new-" + lanCount;
-      clone.querySelector('[data-bs-toggle]').setAttribute("data-bs-target", "#" + collapseId);
-      clone.querySelector('.collapse').setAttribute("id", collapseId);
-      lanContainer.appendChild(clone);
-      lanCount++;
+  // === PROFILE LINKS: add https:// when it is missing ===
+  document.querySelectorAll('#form-1 input[type="url"]').forEach(field => {
+    field.addEventListener('blur', () => {
+      const value = field.value.trim();
+      if (value !== '' && !/^https?:\/\//i.test(value)) field.value = 'https://' + value;
     });
-  }
-
-  lanContainer.addEventListener("click", function (e) {
-    if (e.target.closest(".delete-language-btn")) {
-      const block = e.target.closest(".language-entry");
-      block.style.display = "none";
-      const flag = block.querySelector('input[name="delete_flag[]"]');
-      if (flag) flag.value = "true";
-    }
   });
 
 
-  // === CUSTOM SECTION ===
-  const customContainer = document.getElementById("custom-section-entries");
-  const customTemplate = document.getElementById("custom-template").content;
-  const maxCustomSections = 5;
-  let customCount = customContainer.children.length;
+  // === UNSAVED CHANGES ===
+  // The sidebar and the Back button leave the page without saving: warn first.
+  let isDirty = false;
+  let isSubmitting = false;
+  function markDirty() { isDirty = true; }
 
-  const addCustomBtn = document.getElementById("add-custom-btn");
-  if (addCustomBtn) {
-    addCustomBtn.addEventListener("click", function () {
-      if (customCount >= maxCustomSections) return;
-      const clone = customTemplate.cloneNode(true);
-      const collapseId = "custom-collapse-new-" + customCount;
-      clone.querySelector('[data-bs-toggle]').setAttribute("data-bs-target", "#" + collapseId);
-      clone.querySelector('.collapse').setAttribute("id", collapseId);
-      customContainer.appendChild(clone);
-      customCount++;
-    });
-  }
+  document.querySelectorAll('#sectionWrapper form[id^="form-"]').forEach(form => {
+    form.addEventListener('input', markDirty);
+    form.addEventListener('change', markDirty);
+    form.addEventListener('submit', () => { isSubmitting = true; });
+  });
+  document.getElementById('pdfImportForm')?.addEventListener('submit', () => { isSubmitting = true; });
+  document.getElementById('uploadForm')?.addEventListener('submit', () => { isSubmitting = true; });
 
-  customContainer.addEventListener("click", function (e) {
-    if (e.target.closest(".delete-custom-btn")) {
-      const block = e.target.closest(".custom-section-entry");
-      block.style.display = "none";
-      const flag = block.querySelector('input[name="delete_flag[]"]');
-      if (flag) flag.value = "true";
+  window.addEventListener('beforeunload', event => {
+    if (isDirty && !isSubmitting) {
+      event.preventDefault();
+      event.returnValue = '';
     }
   });
 
   // Initialize modules
-  formToggle.init();
   profilePhotoModalPreview.init();
   profilePhotoDropdownPreview.init();
 });

@@ -14,7 +14,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     && $_POST['action'] === "save_aptitudes_group") {
 
     if (!isset($_SESSION['id'])) {
-        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=unauthorized");
+        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=4&error=unauthorized");
         exit();
     }
 
@@ -59,14 +59,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST"
     }
 
     if ($success) {
-        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=6");
+        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5");
         exit();
     } else {
-        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=save_failed");
+        header("Location: https://qrsume.com/create_resume/form_with_login.php?section=4&error=save_failed");
         exit();
     }
 
 } else {
-    header("Location: https://qrsume.com/create_resume/form_with_login.php?section=5&error=bad_request");
+    header("Location: https://qrsume.com/create_resume/form_with_login.php?section=4&error=bad_request");
     exit();
 }
