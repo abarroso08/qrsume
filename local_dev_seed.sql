@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     is_verified   INTEGER NOT NULL DEFAULT 0,
     privilege     TEXT NOT NULL DEFAULT 'user', -- values seen in code: 'user', 'admin', 'banned'
+    last_username_change TEXT,                   -- assets/user_settings.php (15-day limit)
     created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
 );
