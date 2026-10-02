@@ -1,12 +1,6 @@
 <?php
 
-
 $headTitle = "Dashboard";
-// Include head.php with file existence check
-if (!file_exists('head.php')) {
-    die('Error: head.php not found.');
-}
-
 
 include "head.php";
 
@@ -21,501 +15,621 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
-// Validate session variables
-$userId = $_SESSION['id'] ?? null;
-$username = $_SESSION['username'] ?? 'User';
+require_once __DIR__ . '/premium.php';
+require_once __DIR__ . '/../PDFtoCV/lib/PdfResumeImport.php';
+
+$userId = (int) ($_SESSION['id'] ?? 0);
+$username = (string) ($_SESSION['username'] ?? 'User');
 $privilege = $_SESSION['privilege'] ?? 'user';
 
-if (!$userId) {
+if ($userId === 0) {
     die('Error: User ID not set in session.');
 }
 
-// Initialize database (assuming $db is a PDO instance from head.php)
-try {
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die('Database connection error: ' . $e->getMessage());
+$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+function e(?string $value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-// 2) Load today's stats from page_stats
-$stats = ['views' => 0, 'downloads' => 0, 'qr_scans' => 0];
-$stmt = $db->prepare("
-    SELECT views, downloads, qr_scans
-    FROM page_stats
-    WHERE user_id = :uid AND stat_date = CURDATE()
-");
-$stmt->execute([':uid' => $userId]);
-$row = $stmt->fetch(PDO::FETCH_ASSOC);
-if ($row && $row['views'] !== null) {
-    $stats =  $row;
+function fetchAllRows(PDO $db, string $sql, array $params = []): array
+{
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// -----------------------------------------------------------------------------
+// Statistics: today, the last 7 days and all time (page_stats, one row per day)
+// -----------------------------------------------------------------------------
 
-// 3) Build 7-day arrays from page_stats
-$labels = $views = $dl = $qr = [];
+$labels = $views = $downloads = $qrScans = [];
+$byDate = [];
+foreach (fetchAllRows($db, 'SELECT stat_date, views, downloads, qr_scans FROM page_stats WHERE user_id = ? AND stat_date >= ?',
+    [$userId, date('Y-m-d', strtotime('-6 days'))]) as $row) {
+    $byDate[substr((string) $row['stat_date'], 0, 10)] = $row;
+}
 for ($i = 6; $i >= 0; $i--) {
-    $d = date('Y-m-d', strtotime("-{$i} days"));
-    $labels[] = date('D', strtotime($d));
+    $day = date('Y-m-d', strtotime("-{$i} days"));
+    $labels[] = $i === 0 ? 'Today' : date('D', strtotime($day));
+    $views[] = (int) ($byDate[$day]['views'] ?? 0);
+    $downloads[] = (int) ($byDate[$day]['downloads'] ?? 0);
+    $qrScans[] = (int) ($byDate[$day]['qr_scans'] ?? 0);
+}
 
-    try {
-        $stmt = $db->prepare(
-            'SELECT views, downloads, qr_scans
-             FROM page_stats
-             WHERE user_id = :uid
-             AND stat_date = :dt'
-        );
-        $stmt->execute([':uid' => $userId, ':dt' => $d]);
-        $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        $views[] = (int) ($r['views'] ?? 0);
-        $dl[]    = (int) ($r['downloads'] ?? 0);
-        $qr[]    = (int) ($r['qr_scans'] ?? 0);
-    } catch (PDOException $e) {
-        error_log('Error fetching page stats: ' . $e->getMessage());
-        $views[] = 0;
-        $dl[] = 0;
-        $qr[] = 0;
+$totals = fetchAllRows($db, 'SELECT SUM(views) AS views, SUM(downloads) AS downloads, SUM(qr_scans) AS qr_scans FROM page_stats WHERE user_id = ?', [$userId])[0] ?? [];
+
+$statsData = [
+    'today' => ['views' => end($views), 'downloads' => end($downloads), 'qr_scans' => end($qrScans)],
+    'week' => ['views' => array_sum($views), 'downloads' => array_sum($downloads), 'qr_scans' => array_sum($qrScans)],
+    'total' => ['views' => (int) ($totals['views'] ?? 0), 'downloads' => (int) ($totals['downloads'] ?? 0), 'qr_scans' => (int) ($totals['qr_scans'] ?? 0)],
+];
+
+// -----------------------------------------------------------------------------
+// Resume checklist: what is filled in, ignoring the examples a new account starts with
+// -----------------------------------------------------------------------------
+
+$personal = fetchAllRows($db, 'SELECT * FROM personalinfo WHERE user_id = ?', [$userId])[0] ?? [];
+$contact = fetchAllRows($db, 'SELECT * FROM contactinfo WHERE user_id = ?', [$userId])[0] ?? [];
+$columnValues = fn(string $sql) => array_map('trim', array_column(fetchAllRows($db, $sql, [$userId]), 'value'));
+$educationTitles = $columnValues('SELECT name_of_studies AS value FROM education WHERE user_id = ?');
+$experienceTitles = $columnValues('SELECT job_name AS value FROM experience WHERE user_id = ?');
+$skillNames = $columnValues('SELECT aptitude AS value FROM aptitudes WHERE user_id = ?');
+$languageNames = $columnValues('SELECT language AS value FROM languages WHERE user_id = ?');
+
+$isFilled = fn(?string $value, array $examples = []) => trim((string) $value) !== '' && !in_array(trim((string) $value), $examples, true);
+$hasReal = fn(array $values, array $examples) => count(array_filter($values, fn($v) => $v !== '' && !in_array($v, $examples, true))) > 0;
+$isSampleSet = function (array $values, array $sample): bool {
+    sort($values);
+    sort($sample);
+    return $values === $sample;
+};
+
+$formUrl = 'https://qrsume.com/create_resume/form_with_login.php';
+$checklist = [
+    ['label' => 'Name and job title', 'step' => 0, 'done' => $isFilled($personal['personal_name'] ?? '', ['Your Name'])
+        && $isFilled($personal['personal_profession'] ?? '', ['Your Profession'])],
+    ['label' => 'Profile photo', 'step' => 0, 'done' => $isFilled($personal['personal_photo'] ?? '', ['default.webp'])],
+    ['label' => 'About you', 'step' => 0, 'done' => $isFilled($personal['personal_bio'] ?? '', ['This is a short bio about yourself.'])],
+    ['label' => 'Email and phone', 'step' => 1, 'done' => $isFilled($contact['email'] ?? '', ['youremail@gmail.com'])
+        && $isFilled($contact['phone_number'] ?? '', ['123-456-7890'])],
+    ['label' => 'Education', 'step' => 2, 'done' => $hasReal($educationTitles, ['Your Degree'])],
+    ['label' => 'Work experience', 'step' => 3, 'done' => $hasReal($experienceTitles, ['Your Job Title'])],
+    ['label' => 'Skills', 'step' => 4, 'done' => $skillNames !== [] && !$isSampleSet($skillNames, ['Teamwork', 'Communication', 'Problem Solving', 'Leadership'])],
+    ['label' => 'Languages', 'step' => 5, 'done' => $languageNames !== [] && !$isSampleSet($languageNames, ['English', 'Spanish', 'French'])],
+];
+$doneCount = count(array_filter($checklist, fn($item) => $item['done']));
+$completion = (int) round($doneCount / count($checklist) * 100);
+$nextItem = null;
+foreach ($checklist as $item) {
+    if (!$item['done']) {
+        $nextItem = $item;
+        break;
     }
 }
 
-$total_views = $total_downloads = $total_qrscans = 0;
+$firstName = $isFilled($personal['personal_name'] ?? '', ['Your Name']) ? trim($personal['personal_name']) : $username;
 
+// -----------------------------------------------------------------------------
+// Plan, blog and public page
+// -----------------------------------------------------------------------------
+
+$isPremium = userHasPurchase($db, $userId, PdfResumeImport::PREMIUM_PRODUCT);
 try {
-    $stmt = $db->prepare("SELECT user_id, SUM(views) as total_views, SUM(downloads) as total_downloads, SUM(qr_scans) as total_scans FROM `page_stats` WHERE `user_id` = :uid");
-    $stmt->execute([':uid' => $userId]);
-
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($row) {
-        $total_views = (int)$row['total_views'];
-        $total_downloads = (int)$row['total_downloads'];
-        $total_qrscans = (int)$row['total_scans'];
-    }
-
-} catch (PDOException $e) {
-    error_log('Error fetching total page stats: ' . $e->getMessage());
+    $imports = (new PdfResumeImport($db))->allowance($userId, $privilege === 'admin');
+} catch (PDOException $exception) {
+    $imports = null; // pdf_imports table not created yet
 }
 
+$articleCounts = ['published' => 0, 'draft' => 0];
+foreach (fetchAllRows($db, 'SELECT article_status, COUNT(*) AS total FROM blogarticles WHERE user_id = ? GROUP BY article_status', [$userId]) as $row) {
+    $status = $row['article_status'] === 'published' ? 'published' : 'draft';
+    $articleCounts[$status] += (int) $row['total'];
+}
 
+$publicUrl = 'https://qrsume.com/' . rawurlencode($username);
+$publicText = 'qrsume.com/' . $username;
 
+// QR code of the public page (the same one printed on the PDF resume)
+$qrSvg = '';
+if (is_file(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+    if (class_exists('TCPDF2DBarcode')) {
+        $qrSvg = (new TCPDF2DBarcode($publicUrl . '?qr_scan=true', 'QRCODE,M'))->getBarcodeSVGcode(4, 4, '#111317');
+    }
+}
+$qrDataUri = $qrSvg !== '' ? 'data:image/svg+xml;base64,' . base64_encode($qrSvg) : '';
 ?>
 <style>
-  .custom-card {
-  border-radius: 20px; /* Big smooth rounded corners */
-  box-shadow: 2px 2px 8px 0px rgba(0,0,0,0.10);
-}
-  .custom-stats-card{
-      border-radius: 0 0 20px 20px; /* Big smooth rounded corners */
+  body {
+    background: #f5f6f8;
   }
-  .custom-stats-card-shadow{
-      box-shadow: 2px 2px 8px 0px rgba(0,0,0,0.10);
-  }
-  .custom-stats-card-top-left{
-      border-radius:  20px 0 0 0; /* Big smooth rounded corners */
-  }
-  
-  .custom-stats-card-top-right{
-      border-radius:   0 20px 0 0; /* Big smooth rounded corners */
-  }
-  .custom-stats-button-muted:hover{
-      background-color: #e0e7ff;
-      cursor:pointer;
-  }
-  
- 
-.bottom-round{
-     border-radius: 0 0 20px 20px;
-}
 
+  .dash {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 1.5rem 16px 4rem;
+  }
 
+  .dash-card {
+    height: 100%;
+    padding: 1.25rem;
+    border: 1px solid #e7e8ec;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, .04);
+  }
+
+  .dash-card h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  .dash-muted {
+    color: #6b7280;
+    font-size: .9rem;
+  }
+
+  .dash-header h1 {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 750;
+  }
+
+  .admin-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    padding: .55rem .9rem;
+    border-radius: 12px;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: .9rem;
+  }
+
+  .admin-strip a {
+    padding: .2rem .65rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .1);
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .admin-strip a:hover {
+    background: rgba(255, 255, 255, .2);
+  }
+
+  .completion-ring {
+    --value: 0;
+    flex: 0 0 auto;
+    width: 74px;
+    height: 74px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: conic-gradient(#4f46e5 calc(var(--value) * 1%), #e5e7eb 0);
+  }
+
+  .completion-ring span {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #fff;
+    font-weight: 750;
+  }
+
+  .checklist {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .35rem 1rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .checklist a {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem .5rem;
+    border-radius: 8px;
+    color: #1f2937;
+    text-decoration: none;
+  }
+
+  .checklist a:hover {
+    background: #f3f4f6;
+  }
+
+  .checklist .bi-check-circle-fill {
+    color: #16a34a;
+  }
+
+  .checklist .bi-circle {
+    color: #9ca3af;
+  }
+
+  .checklist .is-todo {
+    font-weight: 600;
+  }
+
+  .checklist .action {
+    margin-left: auto;
+    color: #4f46e5;
+    font-size: .8rem;
+    font-weight: 600;
+  }
+
+  .share-url {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .35rem .35rem .75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f9fafb;
+  }
+
+  .share-url a {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .share-qr {
+    width: 112px;
+    height: 112px;
+    padding: 6px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .stat-tabs .btn {
+    font-size: .8rem;
+  }
+
+  .stat-tile {
+    padding: .75rem;
+    border-radius: 12px;
+    background: #f9fafb;
+  }
+
+  .stat-tile .value {
+    font-size: 1.6rem;
+    font-weight: 750;
+    line-height: 1.1;
+  }
+
+  .stat-tile .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: .3rem;
+    border-radius: 50%;
+  }
+
+  .chart-box {
+    position: relative;
+    height: 190px;
+  }
+
+  .plan-badge {
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 700;
+  }
+
+  .plan-badge.is-premium {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .plan-badge.is-free {
+    background: #f3f4f6;
+    color: #4b5563;
+  }
+
+  .plan-list {
+    margin: .75rem 0 1rem;
+    padding: 0;
+    list-style: none;
+    font-size: .9rem;
+  }
+
+  .plan-list li {
+    display: flex;
+    gap: .5rem;
+    padding: .2rem 0;
+  }
+
+  @media (max-width: 575px) {
+    .checklist {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 
-<body class="bg-light l d-flex flex-column align-items-center justify-content-between" style="min-height:100vh;">
-    <!-- Loading overlay -->
-<!-- Loading overlay -->
-<div id="loading-overlay" style="
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background-color: white;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    font-family: 'Segoe UI', sans-serif;
-">
-    <div class="spinner-border text-primary mb-4" role="status" style="width: 3rem; height: 3rem;">
-        <span class="visually-hidden">Recollecting all your site data...</span>
+<body>
+<?php include 'nav_dashboard.php'; ?>
+
+<main class="dash">
+  <?php if ($privilege === 'admin'): ?>
+    <nav class="admin-strip" aria-label="Admin tools">
+      <strong class="me-1"><i class="bi bi-shield-lock me-1" aria-hidden="true"></i>Admin</strong>
+      <a href="https://qrsume.com/admin/admin_users.php">Users</a>
+      <a href="https://qrsume.com/admin/admin_pages.php">Static pages</a>
+      <a href="https://qrsume.com/PDFtoCV/">PDF to CV</a>
+      <?php if ($userId === 1): ?>
+        <a href="https://qrsume.com/admin/view_tables.php">Database</a>
+      <?php endif; ?>
+    </nav>
+  <?php endif; ?>
+
+  <!-- Greeting and main actions -->
+  <header class="dash-header d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h1>Hi, <?= e($firstName) ?>!</h1>
+      <p class="dash-muted mb-0">Here is your resume at a glance.</p>
     </div>
-    <p id="loading-text" class="text-muted fs-5"></p>
-</div>
+    <div class="d-grid d-sm-flex flex-wrap gap-2 dash-actions">
+      <a class="btn btn-primary" href="<?= e($formUrl) ?>"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Edit resume</a>
+      <a class="btn btn-outline-primary" href="https://qrsume.com/preview.php"><i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>Preview &amp; download PDF</a>
+      <a class="btn btn-outline-secondary" href="<?= e($publicUrl) ?>" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>View my page</a>
+    </div>
+  </header>
 
-<?php
-// Include navigation with file existence check
-if (file_exists('nav_dashboard.php')) {
-    include 'nav_dashboard.php';
-} else {
-    echo '<p class="text-danger text-center">Error: Navigation file not found.</p>';
-}
-?>
-
-<div class="container my-5 bg-light">
-    <h1 class="fw-bold text-center mb-3">Hi, <?= htmlspecialchars($username) ?>! Get ready to land your dream job</h1>
-
-    <div class="row g-4">
-        <!-- Admin Tools -->
-        <?php if ($privilege === 'admin'): ?>
-        <div class="col-12">
-            <div class="card bg-dark text-white shadow">
-                <div class="card-body">
-                    <h4 class="card-title text-center mb-3">Admin Tools</h4>
-                    <div class="row justify-content-center">
-                        <div class="col-md-3 mb-2">
-                            <a href="admin/admin_users.php" class="btn btn-danger w-100">User Management</a>
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <a href="admin/admin_pages.php" class="btn btn-secondary w-100">Static Pages</a>
-                        </div>
-                        <?php if ($userId == 1): ?>
-                        <div class="col-md-3 mb-2">
-                            <a href="admin/view_tables.php" class="btn btn-primary w-100">View Database</a>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
+  <div class="row g-3">
+    <!-- Resume checklist -->
+    <div class="col-lg-8">
+      <section class="dash-card" aria-labelledby="resumeTitle">
+        <div class="d-flex align-items-center gap-3">
+          <div class="completion-ring" style="--value: <?= $completion ?>;" role="img" aria-label="Resume <?= $completion ?>% complete">
+            <span><?= $completion ?>%</span>
+          </div>
+          <div class="flex-grow-1">
+            <h2 id="resumeTitle">Your resume</h2>
+            <p class="dash-muted mb-0">
+              <?php if ($nextItem === null): ?>
+                Everything is filled in. Keep it up to date and share it.
+              <?php else: ?>
+                <?= $doneCount ?> of <?= count($checklist) ?> parts done. Next: <strong><?= e(mb_strtolower($nextItem['label'])) ?></strong>.
+              <?php endif; ?>
+            </p>
+          </div>
+          <?php if ($nextItem !== null): ?>
+            <a class="btn btn-primary btn-sm d-none d-sm-inline-block" href="<?= e($formUrl . '?section=' . $nextItem['step']) ?>">Continue <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+          <?php endif; ?>
         </div>
+
+        <ul class="checklist">
+          <?php foreach ($checklist as $item): ?>
+            <li>
+              <a href="<?= e($formUrl . '?section=' . $item['step']) ?>">
+                <i class="bi <?= $item['done'] ? 'bi-check-circle-fill' : 'bi-circle' ?>" aria-hidden="true"></i>
+                <span class="<?= $item['done'] ? '' : 'is-todo' ?>"><?= e($item['label']) ?></span>
+                <span class="visually-hidden"><?= $item['done'] ? '(done)' : '(to do)' ?></span>
+                <span class="action"><?= $item['done'] ? 'Edit' : 'Add' ?></span>
+              </a>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+
+        <?php if ($completion < 50 && $imports !== null && $imports['remaining'] > 0): ?>
+          <a class="d-flex align-items-center gap-2 mt-3 p-2 rounded-3 text-decoration-none" style="background:#eff6ff;"
+             href="<?= e($formUrl) ?>#pdf-import">
+            <i class="bi bi-file-earmark-arrow-up fs-5 text-primary" aria-hidden="true"></i>
+            <span class="text-dark"><strong>Have a CV in PDF?</strong> Import it and we will fill in your resume for you.</span>
+            <i class="bi bi-arrow-right ms-auto text-primary" aria-hidden="true"></i>
+          </a>
         <?php endif; ?>
+      </section>
+    </div>
 
-        <div class="container-fluid py-4">
-    <!-- Row 1: Stats / Analytics / Resume -->
-    <div class="row g-4 mb-4">
-
-        <!-- 1. Quick Stats -->
-        <div class="col-md-4">
-            <div class="d-flex flex-column h-100 custom-card" style="background-color:transparent;">
-                <div class=" d-flex ">
-                    <h5 id="today-stats-button" class="h-100 d-flex align-items-center custom-stats-card-top-left mb-0 text-dark text-center w-50 px-4 py-2 bg-white">Today’s Stats</h5>
-                    <h5 id="total-stats-button" class="h-100 d-flex align-items-center custom-stats-card-top-right mb-0 custom-stats-button-muted text-dark text-center w-50 px-4 py-2 bg-muted">Total Stats</h5>
-                </div>
-                <div class="bg-white card-body d-flex border-0 custom-stats-card justify-content-around align-items-center p-4">
-                    <div class="text-center">
-                        <h4 id="views" class="mb-1"><?= number_format($stats['views']) ?></h4>
-                        <small class="text-muted">Views</small>
-                    </div>
-                    <div  class="text-center">
-                        <h4 id="downloads" class="mb-1"><?= number_format($stats['downloads']) ?></h4>
-                        <small class="text-muted">Downloads</small>
-                    </div>
-                    <div class="text-center">
-                        <h4 id="qr_scans" class="mb-1"><?= number_format($stats['qr_scans']) ?></h4>
-                        <small class="text-muted">QR scans</small>
-                    </div>
-                </div>
-            </div>
+    <!-- Public page and QR code -->
+    <div class="col-lg-4">
+      <section class="dash-card" aria-labelledby="shareTitle">
+        <h2 id="shareTitle" class="mb-2">Your page</h2>
+        <div class="share-url mb-3">
+          <a href="<?= e($publicUrl) ?>" target="_blank" rel="noopener"><?= e($publicText) ?></a>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="copyLink" data-url="<?= e($publicUrl) ?>">
+            <i class="bi bi-clipboard me-1" aria-hidden="true"></i><span>Copy</span>
+          </button>
         </div>
-
-        <!-- 2. Your Statistics (Analytics) -->
-        <div class="col-md-4">
-            <div class="card h-100 border-0 custom-card rounded-4">
-                <div class="card-body d-flex flex-column justify-content-between p-0">
-                    <div class="text-center px-4 pt-4">
-                        <h5 class="text-dark">Your Statistics</h5>
-                    </div>
-                    <div class="px-3 pb-2">
-                        <canvas id="viewsChart" style="height: 150px; width: 100%;"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- 6. Your Public URL -->
-<div class="col-md-4">
-    <div class="card h-100 border-0 custom-card rounded-4">
-        <div class="card-body text-center p-4">
-            <h5 class="text-dark">Your Public URL</h5>
-            <a href="<?= htmlspecialchars('https://' . $_SERVER['HTTP_HOST'] . '/' . $username) ?>"
-               class="d-block fs-5">
-                <?= htmlspecialchars($_SERVER['HTTP_HOST'] . '/' . $username) ?>
+        <div class="d-flex gap-3 align-items-center">
+          <?php if ($qrDataUri !== ''): ?>
+            <img class="share-qr" src="<?= $qrDataUri ?>" alt="QR code to your page" width="112" height="112">
+          <?php endif; ?>
+          <div class="d-grid gap-2 flex-grow-1">
+            <?php if ($qrDataUri !== ''): ?>
+              <a class="btn btn-sm btn-outline-secondary" href="<?= $qrDataUri ?>" download="qrsume-<?= e($username) ?>-qr.svg">
+                <i class="bi bi-download me-1" aria-hidden="true"></i>Download QR
+              </a>
+            <?php endif; ?>
+            <a class="btn btn-sm btn-outline-secondary" href="https://www.linkedin.com/sharing/share-offsite/?url=<?= urlencode($publicUrl) ?>" target="_blank" rel="noopener noreferrer">
+              <i class="bi bi-linkedin me-1" aria-hidden="true"></i>Share on LinkedIn
             </a>
-
-            <!-- Copy Link Button -->
-            <button class="btn btn-outline-primary btn-sm mt-3" onclick="
-                navigator.clipboard.writeText(location.origin + '/<?= htmlspecialchars($username) ?>');
-                this.textContent='Copied!';
-                setTimeout(() => this.textContent='Copy Link', 2000);
-            ">
-                Copy Link
-            </button>
-
-            <!-- LinkedIn Share Button -->
-            <a href="https://www.linkedin.com/sharing/share-offsite/?url=<?= urlencode('https://' . $_SERVER['HTTP_HOST'] . '/' . $username) ?>"
-               class="btn btn-outline-secondary btn-sm mt-3"
-               target="_blank" rel="noopener noreferrer">
-                <i class="bi bi-linkedin me-1"></i> Share on LinkedIn
-            </a>
+          </div>
         </div>
+      </section>
     </div>
+
+    <!-- Statistics -->
+    <div class="col-lg-8">
+      <section class="dash-card" aria-labelledby="statsTitle">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h2 id="statsTitle">Statistics</h2>
+          <div class="btn-group btn-group-sm stat-tabs" role="group" aria-label="Period">
+            <button type="button" class="btn btn-outline-primary" data-period="today">Today</button>
+            <button type="button" class="btn btn-outline-primary active" data-period="week" aria-pressed="true">Last 7 days</button>
+            <button type="button" class="btn btn-outline-primary" data-period="total">All time</button>
+          </div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-4">
+            <div class="stat-tile">
+              <div class="value" data-stat="views"><?= number_format($statsData['week']['views']) ?></div>
+              <div class="dash-muted"><span class="dot" style="background:#4f46e5"></span>Page views</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="stat-tile">
+              <div class="value" data-stat="downloads"><?= number_format($statsData['week']['downloads']) ?></div>
+              <div class="dash-muted"><span class="dot" style="background:#f59e0b"></span>Downloads</div>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="stat-tile">
+              <div class="value" data-stat="qr_scans"><?= number_format($statsData['week']['qr_scans']) ?></div>
+              <div class="dash-muted"><span class="dot" style="background:#10b981"></span>QR scans</div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="statsChart" aria-label="Views, downloads and QR scans over the last 7 days" role="img"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <!-- Plan and blog -->
+    <div class="col-lg-4 d-flex flex-column gap-3">
+      <section class="dash-card" aria-labelledby="planTitle">
+        <div class="d-flex justify-content-between align-items-center">
+          <h2 id="planTitle">Your plan</h2>
+          <span class="plan-badge <?= $isPremium ? 'is-premium' : 'is-free' ?>"><?= $isPremium ? 'Premium' : 'Free' ?></span>
+        </div>
+        <ul class="plan-list">
+          <li>
+            <i class="bi <?= $isPremium ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-secondary' ?>" aria-hidden="true"></i>
+            <?= $isPremium ? 'PDFs without QRsume branding' : 'PDFs include QRsume branding' ?>
+          </li>
+          <?php if ($imports !== null): ?>
+            <li>
+              <i class="bi bi-file-earmark-arrow-up text-primary" aria-hidden="true"></i>
+              <?php if ($imports['unlimited']): ?>
+                Unlimited CV imports from PDF
+              <?php else: ?>
+                <?= $imports['remaining'] ?> CV import<?= $imports['remaining'] === 1 ? '' : 's' ?> from PDF left
+              <?php endif; ?>
+            </li>
+          <?php endif; ?>
+        </ul>
+        <?php if (!$isPremium): ?>
+          <a class="btn btn-warning btn-sm w-100" href="https://qrsume.com/checkout_remove_branding.php">
+            <i class="bi bi-unlock2-fill me-1" aria-hidden="true"></i>Go premium · €1.99
+          </a>
+        <?php endif; ?>
+      </section>
+
+      <section class="dash-card" aria-labelledby="blogTitle">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <h2 id="blogTitle">Blog</h2>
+          <span class="dash-muted small"><?= $articleCounts['published'] ?> published · <?= $articleCounts['draft'] ?> draft<?= $articleCounts['draft'] === 1 ? '' : 's' ?></span>
+        </div>
+        <p class="dash-muted small mb-3">Articles appear on your public page.</p>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-primary flex-fill" href="https://qrsume.com/assets/article_form.php"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New article</a>
+          <a class="btn btn-sm btn-outline-secondary flex-fill" href="https://qrsume.com/assets/delete_article.php"><i class="bi bi-list-ul me-1" aria-hidden="true"></i>Manage</a>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- Feedback button and modal (handled in footer.php) -->
+<button id="feedbackBtn" class="btn btn-primary btn-sm position-fixed bottom-0 start-0 m-3">
+  <i class="bi bi-chat-heart me-1" aria-hidden="true"></i>Give feedback
+</button>
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Rate Us</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <div id="stars" class="mb-3">
+          <i class="fa fa-star star" data-value="1"></i>
+          <i class="fa fa-star star" data-value="2"></i>
+          <i class="fa fa-star star" data-value="3"></i>
+          <i class="fa fa-star star" data-value="4"></i>
+          <i class="fa fa-star star" data-value="5"></i>
+        </div>
+        <input type="hidden" id="rating" value="0">
+        <textarea id="comment" class="form-control" rows="3" placeholder="Tell us why you chose this rating..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button id="submitFeedback" class="btn btn-success">Submit</button>
+      </div>
+    </div>
+  </div>
 </div>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
+<?php include 'footer.php'; ?>
 
-
-    </div>
-
-    <!-- Row 2: Customize / Blog Management / Public URL -->
-    <div class="row g-4">
-
-        <!-- 4. Customize your site -->
-        <div class="col-md-4">
-            <div class="card h-100 border-0 custom-card rounded-4" style="background-color:#e0e7ff;">
-                <div class="card-body d-flex flex-column justify-content-between p-0">
-                    <div class="text-center px-4 pt-4 d-flex flex-column justify-content-between align-items-center">
-                        <h5 class="text-dark fw-bold">Customize your site</h5>
-                        <div class="d-flex justify-content-around w-100">
-                            <i class="bi bi-person-gear" style="font-size:46px; color:#4f46e5;"></i>
-                        </div>
-                        <p class="text-muted">Edit your online resume and settings easily.</p>
-                    </div>
-                    <div class="mt-auto d-flex justify-content-center gap-3 p-3 bg-light bottom-round">
-                        <a href="https://qrsume.com/create_resume/form_with_login.php"
-                           class="text-decoration-none d-flex align-items-center gap-1 fw-bold"
-                           style="color: #4f46e5;">
-                            <i class="bi bi-pencil-square"></i> Edit Resume
-                        </a>
-                        <div class="vr"></div>
-                        <a href="/assets/user_settings.php"
-                           class="text-secondary text-decoration-none d-flex align-items-center gap-1">
-                            <i class="bi bi-gear"></i> Settings
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-                <!-- 3. Resume Preview -->
-        <div class="col-md-4">
-            <div class="card h-100 border-0 custom-card rounded-4" style="background-color:#e0e7ff;">
-                <div class="card-body h-100 d-flex flex-column justify-content-between p-0">
-                    <div class="text-center h-100" style="padding">
-                        <h5 class="text-dark" style="padding-top:1.5rem; padding-bottom:1rem;">Resume Preview</h5>
-                        <img src="https://qrsume.com/images/resume-preview_barroso.webp"
-                             class="img-fluid rounded"
-                             alt="Resume preview for <?= htmlspecialchars($username) ?>"
-                             style="width:75%">
-                    </div>
-                    <div class="mt-auto d-flex flex-column align-items-center gap-2 p-3 bg-light bottom-round">
-                        <a href="/preview.php" class="btn fw-bold text-white w-100 d-flex align-items-center justify-content-center gap-2" style="background: linear-gradient(135deg, #4f46e5, #6366f1); border-radius: 12px;">
-                            <i class="bi bi-file-earmark-pdf-fill"></i>
-                                Preview &amp; Download PDF
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-<!-- 5. Blog Manager -->
-<div class="col-md-4">
-    <div class="card h-100 border-0 custom-card">
-        <div class="card-body d-flex flex-column justify-content-between p-0">
-            
-            <!-- Top Text -->
-            <div class="text-center px-4 pt-4">
-                <h5 class="text-dark mb-1">Blog Manager</h5>
-                <p class="text-muted small">Manage your content easily.</p>
-            </div>
-
-            <!-- Buttons -->
-            <div class="mt-auto d-flex flex-column align-items-center gap-2 p-3 bg-light bottom-round">
-                
-                <!-- New Article Button -->
-                <a href="https://qrsume.com/assets/article_form.php"
-                   class="text-decoration-none d-flex align-items-center gap-1 fw-bold"
-                   style="color: #4f46e5;">
-                    <i class="bi bi-pencil-square"></i>
-                    New Article
-                </a>
-
-                <!-- Edit Existing Link -->
-                <a href="/assets/delete_article.php"
-                   class="text-secondary small d-flex align-items-center gap-1 mt-2 text-decoration-none">
-                    <i class="bi bi-tools"></i>
-                    Edit Existing
-                </a>
-
-            </div>
-
-        </div>
-    </div>
-</div>
-
-
-
-
-
-    </div>
-</div>
-
-    </div>
-</div>
-
-<?php if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) { ?>
-        <!-- Feedback Button -->
-        <button id="feedbackBtn" class="btn btn-primary position-fixed bottom-0 start-0 m-3">
-            Give Feedback
-        </button>
-        <!-- Feedback Modal -->
-        <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Rate Us</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body text-center">
-                        <!-- Star Rating -->
-                        <div id="stars" class="mb-3">
-                            <i class="fa fa-star star" data-value="1"></i>
-                            <i class="fa fa-star star" data-value="2"></i>
-                            <i class="fa fa-star star" data-value="3"></i>
-                            <i class="fa fa-star star" data-value="4"></i>
-                            <i class="fa fa-star star" data-value="5"></i>
-                        </div>
-                        <input type="hidden" id="rating" value="0">
-                        <textarea id="comment" class="form-control" rows="3" placeholder="Tell us why you chose this rating..."></textarea>
-                    </div>
-                    <div class="modal-footer">
-                        <button id="submitFeedback" class="btn btn-success">Submit</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-
-        <!-- FontAwesome for stars -->
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <?php } ?>
-
-<?php
-// Include footer with file existence check
-if (file_exists('footer.php')) {
-    include 'footer.php';
-} else {
-    echo '<p class="text-danger text-center">Error: Footer file not found.</p>';
-}
-?>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-    const statsData = {
-    today: {
-      views: <?= (int)$stats['views'] ?>,
-      downloads: <?= (int)$stats['downloads'] ?>,
-      qr_scans: <?= (int)$stats['qr_scans'] ?>
-    },
-    total: {
-      views: <?= $total_views ?>,
-      downloads: <?= $total_downloads ?>,
-      qr_scans: <?= $total_qrscans ?>
-    }
-  };
-    
-    
-    const phrases = [
-        "Recollecting all your site data...",
-        "You’re making the web cooler with this amazing profile.",
-        "Polishing up your stats for maximum shine.",
-        "Loading your digital awesomeness...",
-        "Just a sec! We're boosting your profile magic.",
-        "Crunching numbers like a data wizard...",
-        "Making your page sparkle ✨",
-        "Summoning your resume greatness..."
-    ];
+document.addEventListener('DOMContentLoaded', () => {
+  const statsData = <?= json_encode($statsData) ?>;
 
-    // Select a random phrase and display it
-    document.getElementById('loading-text').textContent =
-        phrases[Math.floor(Math.random() * phrases.length)];
-
-    // Remove overlay on load
-    window.addEventListener('load', function () {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-            overlay.style.transition = 'opacity 0.5s ease';
-            overlay.style.opacity = 0;
-            setTimeout(() => overlay.remove(), 500);
-        }
+  // Period switch for the three numbers
+  document.querySelectorAll('[data-period]').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-period]').forEach(other => {
+        other.classList.toggle('active', other === button);
+        other.setAttribute('aria-pressed', String(other === button));
+      });
+      Object.entries(statsData[button.dataset.period]).forEach(([key, value]) => {
+        document.querySelector(`[data-stat="${key}"]`).textContent = Number(value).toLocaleString();
+      });
     });
+  });
 
-// Validate data before rendering chart
-const labels = <?= json_encode($labels) ?> || [];
-const viewsData = <?= json_encode($views) ?> || [];
-const downloadsData = <?= json_encode($dl) ?> || [];
-const qrData = <?= json_encode($qr) ?> || [];
+  // Copy the public link
+  const copyButton = document.getElementById('copyLink');
+  copyButton?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(copyButton.dataset.url);
+      copyButton.querySelector('span').textContent = 'Copied!';
+      setTimeout(() => { copyButton.querySelector('span').textContent = 'Copy'; }, 2000);
+    } catch (error) {
+      window.prompt('Copy your link:', copyButton.dataset.url);
+    }
+  });
 
-const ctx = document.getElementById('viewsChart').getContext('2d');
-new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: labels,
+  // Last 7 days chart
+  if (window.Chart) {
+    new Chart(document.getElementById('statsChart'), {
+      type: 'line',
+      data: {
+        labels: <?= json_encode($labels) ?>,
         datasets: [
-            {
-                label: 'Views',
-                data: viewsData,
-                borderColor: '#4f46e5',
-                backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                tension: 0.4
-            },
-            {
-                label: 'Downloads',
-                data: downloadsData,
-                borderColor: '#f59e0b',
-                backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                tension: 0.4
-            },
-            {
-                label: 'QR scans',
-                data: qrData,
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                tension: 0.4
-            }
-        ]
-    },
-    options: {
-        scales: {
-            y: { beginAtZero: true }
-        },
-        plugins: {
-            legend: { position: 'bottom' }
-        }
-    }
-});
-
-$(document).ready(function () {
-      $("#total-stats-button, #today-stats-button").click( function() {
-          const clickedId = $(this).attr("id");
-          
-          $(this).removeClass("custom-stats-button-muted bg-muted");
-          $(this).addClass("bg-white");
-          
-          if(clickedId == "today-stats-button"){
-              $("#total-stats-button").removeClass("bg-white");
-              $("#total-stats-button").addClass("custom-stats-button-muted bg-muted");
-          }else{
-              $("#today-stats-button").removeClass("bg-white");
-              $("#today-stats-button").addClass("custom-stats-button-muted bg-muted");
-          }
-      });
-      
-      $("#today-stats-button, #total-stats-button").click(function () {
-        const type = $(this).attr("id") === "today-stats-button" ? "today" : "total";
-      
-        $("#views").text(statsData[type].views.toLocaleString());
-        $("#downloads").text(statsData[type].downloads.toLocaleString());
-        $("#qr_scans").text(statsData[type].qr_scans.toLocaleString());
-      });
-
+          { label: 'Page views', data: <?= json_encode($views) ?>, borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, .12)', fill: true, tension: .35 },
+          { label: 'Downloads', data: <?= json_encode($downloads) ?>, borderColor: '#f59e0b', backgroundColor: 'transparent', tension: .35 },
+          { label: 'QR scans', data: <?= json_encode($qrScans) ?>, borderColor: '#10b981', backgroundColor: 'transparent', tension: .35 },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        plugins: { legend: { display: false } },
+      },
     });
-
+  }
+});
 </script>
-
 </body>
 </html>
