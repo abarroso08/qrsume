@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qrsume.com/PDFtoCV/resume.schema.json",
+  "title": "QRsume resume",
+  "description": "Every field the site uses to build a resume (create_resume forms, profile editor and preview.php). Keys follow the resumes.data JSON blob and field names are the database column names, so the data can be saved without renaming anything.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["personal_info", "contact_info", "education", "experience", "skills", "languages", "projects", "custom_sections"],
+  "properties": {
+    "personal_info": {
+      "description": "Table personalinfo (create_resume section 1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["personal_name", "personal_lastname", "personal_profession", "personal_bio"],
+      "properties": {
+        "personal_name": { "type": "string", "description": "First name." },
+        "personal_lastname": { "type": "string", "description": "Last name(s)." },
+        "personal_profession": { "type": "string", "description": "Headline or job title shown under the name." },
+        "personal_bio": { "type": "string", "description": "Professional summary. May contain line breaks." }
+      }
+    },
+    "contact_info": {
+      "description": "Table contactinfo (create_resume section 2). Social fields are full URLs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["email", "phone_number", "github", "linkedin", "twitter", "facebook"],
+      "properties": {
+        "email": { "type": "string" },
+        "phone_number": { "type": "string" },
+        "github": { "type": "string", "description": "https://github.com/..." },
+        "linkedin": { "type": "string", "description": "https://www.linkedin.com/in/..." },
+        "twitter": { "type": "string", "description": "https://x.com/... or https://twitter.com/..." },
+        "facebook": { "type": "string", "description": "https://www.facebook.com/..." }
+      }
+    },
+    "education": {
+      "description": "Table education (create_resume section 3).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name_of_studies", "place_of_study", "date", "brief_description"],
+        "properties": {
+          "name_of_studies": { "type": "string", "description": "Degree or course." },
+          "place_of_study": { "type": "string", "description": "School or university." },
+          "date": { "type": "string", "description": "Free text, e.g. \"2020–2022\"." },
+          "brief_description": { "type": "string" }
+        }
+      }
+    },
+    "experience": {
+      "description": "Table experience (create_resume section 4).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["job_name", "place_of_work", "date", "brief_description"],
+        "properties": {
+          "job_name": { "type": "string", "description": "Job title." },
+          "place_of_work": { "type": "string", "description": "Company, optionally with location." },
+          "date": { "type": "string", "description": "Free text, e.g. \"2022–Present\"." },
+          "brief_description": { "type": "string", "description": "Responsibilities and achievements. May contain line breaks." }
+        }
+      }
+    },
+    "skills": {
+      "description": "Table aptitudes (create_resume section 6).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["aptitude"],
+        "properties": {
+          "aptitude": { "type": "string" }
+        }
+      }
+    },
+    "languages": {
+      "description": "Table languages (create_resume section 7).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["language", "level"],
+        "properties": {
+          "language": { "type": "string" },
+          "level": { "type": "string", "description": "Free text, e.g. \"C1\" or \"Native\". Empty when the PDF gives none." }
+        }
+      }
+    },
+    "projects": {
+      "description": "Table interests (create_resume section 5), shown as Projects.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["interest", "description"],
+        "properties": {
+          "interest": { "type": "string", "description": "Project title." },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "custom_sections": {
+      "description": "Table custom_sections (create_resume section 8): any other section, e.g. Certifications.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section_title", "section_content"],
+        "properties": {
+          "section_title": { "type": "string" },
+          "section_content": { "type": "string", "description": "May contain line breaks." }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "personal_info": {
+        "personal_name": "Ana",
+        "personal_lastname": "García López",
+        "personal_profession": "Backend Engineer",
+        "personal_bio": "Backend engineer focused on payments and data platforms."
+      },
+      "contact_info": {
+        "email": "ana@example.com",
+        "phone_number": "+34 600 000 000",
+        "github": "https://github.com/anagarcia",
+        "linkedin": "https://www.linkedin.com/in/anagarcia",
+        "twitter": "",
+        "facebook": ""
+      },
+      "education": [
+        { "name_of_studies": "B.Sc. in Computer Science", "place_of_study": "Universidad de Madrid", "date": "2016–2020", "brief_description": "" }
+      ],
+      "experience": [
+        { "job_name": "Software Engineer", "place_of_work": "Acme Corp", "date": "2020–Present", "brief_description": "Built internal tools.\nLed the billing redesign." }
+      ],
+      "skills": [{ "aptitude": "PHP" }, { "aptitude": "SQL" }],
+      "languages": [{ "language": "Spanish", "level": "Native" }, { "language": "English", "level": "C1" }],
+      "projects": [{ "interest": "QRsume", "description": "QR-based online resumes." }],
+      "custom_sections": [{ "section_title": "Certifications", "section_content": "AWS Certified Developer (2023)" }]
+    }
+  ]
+}

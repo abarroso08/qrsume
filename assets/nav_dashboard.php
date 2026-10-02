@@ -7,7 +7,7 @@
   <div class="container-fluid">
     
     <!-- Brand: Username -->
-    <a class="navbar-brand d-flex align-items-center" href="<?= $_SESSION['username'] ?? '#' ?>">
+    <a class="navbar-brand d-flex align-items-center" href="/<?= htmlspecialchars(rawurlencode((string) ($_SESSION['username'] ?? ''))) ?>">
       <span class="fw-bold px-2"><?= htmlspecialchars($personalinfo["personal_name"] ?? '') ?></span> 
       <?= htmlspecialchars($personalinfo["personal_lastname"] ?? '') ?>
     </a>
