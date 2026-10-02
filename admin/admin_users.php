@@ -4,10 +4,45 @@ if (php_sapi_name() === 'cli-server') {
     ini_set('display_errors', 1);
 }
 include '../assets/db.php'; // Include database connection
+require_once '../assets/premium.php';
+
+const PREMIUM_PRODUCT = 'remove_qrsume_branding';
 
 // 🔒 Restrict Access to Admins Only
 if (!isset($_SESSION['privilege']) || $_SESSION['privilege'] !== 'admin') {
     die("Access denied. You must be an admin.");
+}
+
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// Handle Premium Request: grant adds a manual purchase (no Stripe payment, amount 0);
+// remove marks every purchase as revoked, so Stripe payments stay on record
+if (isset($_POST['premium_action'], $_POST['user_id'])) {
+    if (!hash_equals($_SESSION['csrf_token'], (string) ($_POST['csrf_token'] ?? ''))) {
+        die('Invalid request. Reload the page and try again.');
+    }
+
+    $user_id = (int) $_POST['user_id'];
+
+    if ($_POST['premium_action'] === 'grant' && !userHasPurchase($db, $user_id, PREMIUM_PRODUCT)) {
+        $stmt = $db->prepare("INSERT INTO user_purchases (user_id, product_key, amount_paid, currency, status)
+                              VALUES (?, ?, 0, 'eur', 'paid')");
+        $stmt->execute([$user_id, PREMIUM_PRODUCT]);
+        header("Location: admin_users.php?success=Premium granted");
+        exit();
+    }
+
+    if ($_POST['premium_action'] === 'remove') {
+        $stmt = $db->prepare("UPDATE user_purchases SET status = 'revoked' WHERE user_id = ? AND product_key = ? AND status = 'paid'");
+        $stmt->execute([$user_id, PREMIUM_PRODUCT]);
+        header("Location: admin_users.php?success=Premium removed");
+        exit();
+    }
+
+    header("Location: admin_users.php");
+    exit();
 }
 
 // Handle Delete Request
@@ -35,6 +70,15 @@ if (isset($_POST['update_user'])) {
 // Fetch Users
 $stmt = $db->query("SELECT id, username, email, privilege, created_at, updated_at FROM users");
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Premium status per user: paid through Stripe (amount > 0) or granted here (amount 0)
+$stmt = $db->prepare("SELECT user_id, MAX(amount_paid) AS amount_paid FROM user_purchases
+                      WHERE product_key = ? AND status = 'paid' GROUP BY user_id");
+$stmt->execute([PREMIUM_PRODUCT]);
+$premium = [];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $premium[(int) $row['user_id']] = (int) $row['amount_paid'] > 0 ? 'paid' : 'granted';
+}
 ?>
 
 <!DOCTYPE html>
@@ -63,6 +107,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <th>Username</th>
                 <th>Email</th>
                 <th>Privilege</th>
+                <th>Premium</th>
                 <th>Created At</th>
                 <th>Updated At</th>
                 <th>Actions</th>
@@ -71,7 +116,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <tbody>
             <?php foreach ($users as $user): ?>
                 <tr>
-                    <?php if ($_SESSION["username"] == "barroso" || $_SESSION["admin_impersonating"] == true) {?>
+                    <?php if ($_SESSION["username"] == "barroso" || ($_SESSION["admin_impersonating"] ?? false) == true) {?>
                     <td>
     <a href="https://qrsume.com/<?= htmlspecialchars($user['username']) ?>" target="_blank" class="btn btn-outline-primary btn-sm mb-1">View Site</a>
 
@@ -96,6 +141,18 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <option value="admin" <?= $user['privilege'] === 'admin' ? 'selected' : '' ?>>Admin</option>
                             </select>
                         </td>
+                        <td class="text-nowrap">
+                            <?php $premiumStatus = $premium[(int) $user['id']] ?? null; ?>
+                            <?php if ($premiumStatus === null): ?>
+                                <span class="badge text-bg-secondary">Free</span><br>
+                                <button type="submit" form="premium-<?= $user['id'] ?>" class="btn btn-outline-warning btn-sm mt-1"
+                                        onclick="return confirm('Make <?= htmlspecialchars($user['username'], ENT_QUOTES) ?> premium?')">Make premium</button>
+                            <?php else: ?>
+                                <span class="badge text-bg-warning"><?= $premiumStatus === 'paid' ? 'Premium (paid)' : 'Premium (granted)' ?></span><br>
+                                <button type="submit" form="premium-<?= $user['id'] ?>" class="btn btn-outline-danger btn-sm mt-1"
+                                        onclick="return confirm('Remove premium from <?= htmlspecialchars($user['username'], ENT_QUOTES) ?>?<?= $premiumStatus === 'paid' ? ' They paid for it through Stripe.' : '' ?>')">Remove premium</button>
+                            <?php endif; ?>
+                        </td>
                         <td><?= $user['created_at'] ?></td>
                         <td><?= $user['updated_at'] ?></td>
                         <td>
@@ -108,6 +165,15 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php endforeach; ?>
         </tbody>
     </table>
+
+    <!-- Premium forms live outside the table: each row is already inside a form, and forms cannot be nested -->
+    <?php foreach ($users as $user): ?>
+        <form method="POST" id="premium-<?= $user['id'] ?>" class="d-none">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+            <input type="hidden" name="user_id" value="<?= $user['id'] ?>">
+            <input type="hidden" name="premium_action" value="<?= isset($premium[(int) $user['id']]) ? 'remove' : 'grant' ?>">
+        </form>
+    <?php endforeach; ?>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
