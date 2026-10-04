@@ -63,6 +63,17 @@ try {
     $contact['phone_number']       = $_POST['phone_number'] ?? '';
     $personal['personal_bio']      = $_POST['personal_bio'] ?? '';
 
+    $stmt = $pdo->prepare('SELECT personal_profession FROM personalinfo WHERE user_id = ?');
+    $stmt->execute([$user_id]);
+    $storedProfession = (string) ($stmt->fetchColumn() ?: '');
+    $stmt = $pdo->prepare('SELECT linkedin, github FROM contactinfo WHERE user_id = ?');
+    $stmt->execute([$user_id]);
+    $storedContact = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $personal['personal_profession'] = resumeRealValue((string) ($_POST['personal_profession'] ?? $storedProfession));
+    $contact['linkedin'] = resumeRealValue((string) ($_POST['linkedin'] ?? $storedContact['linkedin'] ?? ''));
+    $contact['github'] = resumeRealValue((string) ($_POST['github'] ?? $storedContact['github'] ?? ''));
+
     $education       = $_POST['education'] ?? [];
     $experience       = $_POST['experience'] ?? [];
     $skills           = $_POST['skills'] ?? [];
@@ -125,25 +136,45 @@ $tex .= "\\pagenumbering{gobble}\n";
 $tex .= "\\setlength{\\parindent}{0pt}\n";
 $tex .= "\\titleformat{\\section}{\\large\\bfseries}{}{0em}{}[{\\vspace{-0.6em}\\hrule}]\n";
 $tex .= "\\titlespacing{\\section}{0pt}{1em}{0.6em}\n";
+// Document properties and a Unicode map for each glyph (pdflatex), so parsers read accents correctly
+$fullName = trim($personal['personal_name'] . ' ' . $personal['personal_lastname']);
+$keywords = implode(', ', array_filter(array_merge(
+    array_map(fn(array $skill) => trim($skill['aptitude'] ?? ''), $skills),
+    array_map(fn(array $lang) => trim($lang['language'] ?? ''), $languages)
+)));
+$tex .= "\\hypersetup{pdftitle={" . latexEscape(implode(' - ', array_filter([$fullName, $personal['personal_profession']]))) . "},"
+    . " pdfauthor={" . latexEscape($fullName) . "}, pdfsubject={" . latexEscape($personal['personal_profession']) . "},"
+    . " pdfkeywords={" . latexEscape($keywords) . "}, pdflang={" . resumeLanguage() . "}}\n";
+$tex .= "\\ifdefined\\pdfgentounicode\\input{glyphtounicode}\\pdfgentounicode=1\\fi\n";
 $tex .= "\\begin{document}\n\n";
 
 // ========== HEADER ==========
-$tex .= "{\\Huge\\bfseries " . latexEscape(trim($personal['personal_name'] . ' ' . $personal['personal_lastname'])) . "}\\\\[0.3em]\n";
+$tex .= "{\\Huge\\bfseries " . latexEscape($fullName) . "}\\\\[0.3em]\n";
+if ($personal['personal_profession'] !== '') {
+    $tex .= "{\\large " . latexEscape($personal['personal_profession']) . "}\\\\[0.2em]\n";
+}
 $contactLine = [];
 if ($contact['email'] !== '') {
-    $contactLine[] = latexEscape($contact['email']);
+    $contactLine[] = '\\href{mailto:' . $contact['email'] . '}{' . latexEscape($contact['email']) . '}';
 }
 if ($contact['phone_number'] !== '') {
     $contactLine[] = latexEscape($contact['phone_number']);
 }
-if ($display_branding) {
-    $contactLine[] = '\\href{' . $profileLink . '}{qrsume.com/' . latexEscape($username) . '}';
+$webLine = [];
+foreach (['linkedin', 'github'] as $network) {
+    if ($contact[$network] !== '') {
+        $webLine[] = '\\href{' . resumeLinkUrl($contact[$network]) . '}{' . latexEscape(resumeLinkText($contact[$network])) . '}';
+    }
 }
-$tex .= implode(' $\\vert$ ', $contactLine) . "\n\n";
+if ($display_branding) {
+    $webLine[] = '\\href{' . $profileLink . '}{qrsume.com/' . latexEscape($username) . '}';
+}
+$tex .= implode(" \\\\\n", array_filter([implode(' $\\vert$ ', $contactLine), implode(' $\\vert$ ', $webLine)])) . "\n\n";
 
 // ========== BIO ==========
 if ($personalBio && $personal['personal_bio'] !== '') {
-    $tex .= "\\vspace{0.8em}\n" . latexEscape($personal['personal_bio']) . "\n\n";
+    $tex .= latexSection(resumeSectionTitles(resumeLanguage())['summary'] ?? 'Summary');
+    $tex .= latexEscape($personal['personal_bio']) . "\n\n";
 }
 
 // ========== SECTIONS (in the order chosen in the preview) ==========
@@ -156,8 +187,9 @@ foreach ($sectionOrder as $sectionKey) {
             }
             $tex .= latexSection($titles['education']);
             foreach ($education as $edu) {
-                $tex .= "\\textbf{" . latexEscape($edu['name_of_studies'] ?? '') . "} \\hfill " . latexEscape($edu['date'] ?? '') . "\\\\\n";
-                $tex .= latexEscape($edu['place_of_study'] ?? '') . "\n\n";
+                $tex .= "\\textbf{" . latexEscape($edu['name_of_studies'] ?? '') . "}\\\\\n";
+                $meta = implode(' | ', array_filter([trim($edu['place_of_study'] ?? ''), trim($edu['date'] ?? '')], 'strlen'));
+                $tex .= "{\\color{darkgray}" . latexEscape($meta) . "}\n\n";
                 if ($showDescription && !empty($edu['desc'])) {
                     $tex .= latexEscape($edu['desc']) . "\n\n";
                 }
@@ -172,7 +204,10 @@ foreach ($sectionOrder as $sectionKey) {
             $tex .= latexSection($titles['experience']);
             foreach ($experience as $exp) {
                 $jobTitle = resumeJobTitle($exp);
-                $tex .= "\\textbf{" . latexEscape($jobTitle) . "} \\hfill " . latexEscape($exp['date'] ?? '') . "\\\\\n";
+                $tex .= "\\textbf{" . latexEscape($jobTitle) . "}\\\\\n";
+                if (trim($exp['date'] ?? '') !== '') {
+                    $tex .= "{\\color{darkgray}" . latexEscape(trim($exp['date'])) . "}\\\\\n";
+                }
                 $tex .= latexEscape($exp['brief_description'] ?? '') . "\n\n";
             }
             break;
@@ -183,11 +218,7 @@ foreach ($sectionOrder as $sectionKey) {
                 break;
             }
             $tex .= latexSection($titles['skills']);
-            $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
-            foreach ($skills as $skill) {
-                $tex .= "\\item " . latexEscape($skill['aptitude'] ?? '') . "\n";
-            }
-            $tex .= "\\end{itemize}\n\n";
+            $tex .= latexEscape(implode(', ', array_filter(array_map(fn(array $skill) => trim($skill['aptitude'] ?? ''), $skills), 'strlen'))) . "\n\n";
             break;
 
         // ========== LANGUAGES ==========
@@ -196,11 +227,7 @@ foreach ($sectionOrder as $sectionKey) {
                 break;
             }
             $tex .= latexSection($titles['languages']);
-            $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
-            foreach ($languages as $lang) {
-                $tex .= "\\item " . latexEscape(resumeLanguageLine($lang)) . "\n";
-            }
-            $tex .= "\\end{itemize}\n\n";
+            $tex .= latexEscape(implode(', ', array_filter(array_map('resumeLanguageLine', $languages), 'strlen'))) . "\n\n";
             break;
 
         // ========== PROJECTS / INTERESTS ==========

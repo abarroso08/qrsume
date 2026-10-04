@@ -115,6 +115,14 @@ $resumeLanguage = resumeLanguage();
 $sectionTitles = ['en' => resumeSectionTitles('en'), 'es' => resumeSectionTitles('es')];
 $profileUrl = 'https://qrsume.com/' . $username;
 $profileText = 'qrsume.com/' . $username;
+$profession = resumeRealValue((string) ($personal['personal_profession'] ?? ''));
+$webLinks = [];
+foreach (['linkedin', 'github'] as $network) {
+    $link = resumeRealValue((string) ($contact[$network] ?? ''));
+    if ($link !== '') {
+        $webLinks[] = [resumeLinkText($link), resumeLinkUrl($link)];
+    }
+}
 
 // -----------------------------------------------------------------------------
 // Sheet rendering
@@ -175,11 +183,12 @@ function sectionHeading(string $key, string $title, string $addType = ''): strin
 function renderEducationEntry(string $i, array $edu): string
 {
     return '<div class="sheet-entry" data-entry>' . entryTools()
-        . '<div class="pb sheet-row">'
-        . editable("education[$i][name_of_studies]", $edu['name_of_studies'] ?? '', 'Degree / studies', 'sheet-row-title', 'div')
-        . editable("education[$i][date]", $edu['date'] ?? '', 'Date', 'sheet-row-date', 'div')
+        . editable("education[$i][name_of_studies]", $edu['name_of_studies'] ?? '', 'Degree / studies', 'pb sheet-text sheet-entry-title', 'div')
+        . '<div class="pb sheet-text sheet-meta">'
+        . editable("education[$i][place_of_study]", $edu['place_of_study'] ?? '', 'Institution')
+        . '<span class="meta-sep"> | </span>'
+        . editable("education[$i][date]", $edu['date'] ?? '', 'Dates')
         . '</div>'
-        . editable("education[$i][place_of_study]", $edu['place_of_study'] ?? '', 'Institution', 'pb sheet-text', 'div')
         . editable("education[$i][desc]", $edu['brief_description'] ?? '', 'Description', 'pb sheet-text edu-desc', 'div', true)
         . '</div>';
 }
@@ -187,31 +196,31 @@ function renderEducationEntry(string $i, array $edu): string
 function renderExperienceEntry(string $i, array $exp): string
 {
     return '<div class="sheet-entry" data-entry>' . entryTools()
-        . '<div class="pb sheet-row"><div class="sheet-row-title">'
+        . '<div class="pb sheet-text sheet-entry-title">'
         . editable("experience[$i][job_name]", $exp['job_name'] ?? '', 'Job title')
         . '<span class="job-sep"> - </span>'
         . editable("experience[$i][place_of_work]", $exp['place_of_work'] ?? '', 'Company')
         . '</div>'
-        . editable("experience[$i][date]", $exp['date'] ?? '', 'Date', 'sheet-row-date', 'div')
-        . '</div>'
+        . editable("experience[$i][date]", $exp['date'] ?? '', 'Dates', 'pb sheet-text sheet-meta', 'div')
         . editable("experience[$i][brief_description]", $exp['brief_description'] ?? '', 'Describe your responsibilities and achievements', 'pb sheet-text sheet-indented', 'div', true)
         . '</div>';
 }
 
+// Skills and languages are one comma-separated paragraph, like the PDF
 function renderSkillItem(string $i, array $skill): string
 {
-    return '<div class="sheet-grid-item" data-entry>' . itemRemoveButton() . '• '
+    return '<span class="sheet-inline-item" data-entry>' . itemRemoveButton()
         . editable("skills[$i][aptitude]", $skill['aptitude'] ?? '', 'Skill')
-        . '</div>';
+        . '<span class="inline-sep">, </span></span>';
 }
 
 function renderLanguageItem(string $i, array $lang): string
 {
-    return '<div class="sheet-grid-item" data-entry>' . itemRemoveButton() . '• '
+    return '<span class="sheet-inline-item" data-entry>' . itemRemoveButton()
         . editable("languages[$i][language]", $lang['language'] ?? '', 'Language')
         . '<span class="level-open"> (</span>'
         . editable("languages[$i][level]", $lang['level'] ?? '', 'Level')
-        . '<span class="level-close">)</span></div>';
+        . '<span class="level-close">)</span><span class="inline-sep">, </span></span>';
 }
 
 function renderProjectEntry(string $i, array $project): string
@@ -224,18 +233,6 @@ function renderProjectEntry(string $i, array $project): string
         . '</div>';
 }
 
-/**
- * Wrap two-column list items in rows of two, like the PDF prints them.
- */
-function renderGridRows(array $items): string
-{
-    $html = '';
-    foreach (array_chunk($items, 2) as $row) {
-        $html .= '<div class="pb sheet-grid-row">' . implode('', $row) . '</div>';
-    }
-
-    return $html;
-}
 ?>
 
 <style>
@@ -740,7 +737,6 @@ function renderGridRows(array $items): string
 
   .has-photo .sheet-header-text {
     margin-left: 12pt;
-    padding-top: max(0pt, calc((78pt - var(--c) * 3.125 - var(--c) - 4pt) / 2));
   }
 
   .sheet-name {
@@ -827,47 +823,35 @@ function renderGridRows(array $items): string
     background: #000;
   }
 
-  /* Title row: MultiCell(3/4 page) + right-aligned date cell */
-  .sheet-row {
-    display: flex;
-    align-items: flex-start;
-    min-height: max(15pt, calc(var(--c) * 1.375));
+  /* Entry title (MultiCell, bold) and the grey line under it (dates, school) */
+  .sheet-entry-title {
     font-size: calc(var(--c) * 1.1);
     font-weight: 700;
   }
 
-  .sheet-experience .sheet-row {
+  .sheet-meta {
+    color: #505050;
+  }
+
+  .sheet-experience .sheet-meta {
     margin-bottom: var(--space-list);
   }
 
-  .sheet-row-title {
-    flex: 0 0 446.46pt;
-    width: 446.46pt;
+  .sheet-profession {
     padding: 0 var(--pad);
-    overflow-wrap: anywhere;
-  }
-
-  .sheet-row-date {
-    flex: 1;
-    min-width: 0;
-    padding: 0 var(--pad);
-    line-height: max(15pt, calc(var(--c) * 1.375));
-    text-align: right;
+    color: #3c3c3c;
+    font-size: calc(var(--c) * 1.2);
+    line-height: 1.25;
     white-space: nowrap;
   }
 
-  /* Two-column bullet lists: Cell(pageWidth / 2, 15) */
-  .sheet-grid-row {
-    display: grid;
-    grid-template-columns: 297.64pt minmax(0, 1fr);
-    height: 15pt;
-    line-height: 15pt;
-  }
-
-  .sheet-grid-item {
+  /* Skills and languages: one comma-separated paragraph */
+  .sheet-inline-item {
     position: relative;
-    padding: 0 var(--pad);
-    white-space: nowrap;
+  }
+
+  .sheet-inline-item:last-child .inline-sep {
+    display: none;
   }
 
   /* Editable text */
@@ -937,15 +921,17 @@ function renderGridRows(array $items): string
 
   .item-remove {
     position: absolute;
-    top: 50%;
+    top: -15px;
     left: 0;
-    transform: translate(calc(-100% - 2px), -50%);
+    width: 16px;
+    height: 16px;
+    font-size: 11px;
     opacity: 0;
     pointer-events: none;
   }
 
-  .sheet-grid-item:hover .item-remove,
-  .sheet-grid-item:focus-within .item-remove {
+  .sheet-inline-item:hover .item-remove,
+  .sheet-inline-item:focus-within .item-remove {
     opacity: 1;
     pointer-events: auto;
   }
@@ -1026,8 +1012,8 @@ function renderGridRows(array $items): string
     color: #adb5bd;
   }
 
-  .sheet-grid-item:not(:hover):not(:focus-within) .is-ghost,
-  .sheet-grid-item:not(:hover):not(:focus-within) .is-ghost-field {
+  .sheet-inline-item:not(:hover):not(:focus-within) .is-ghost,
+  .sheet-inline-item:not(:hover):not(:focus-within) .is-ghost-field {
     display: none;
   }
 
@@ -1373,11 +1359,14 @@ function renderGridRows(array $items): string
                 <?= editable('personal_name', $personal['personal_name'] ?? '', 'Name') ?>
                 <?= editable('personal_lastname', $personal['personal_lastname'] ?? '', 'Last name') ?>
               </div>
-              <div class="sheet-contact"><?= editable('email', $contact['email'] ?? $account['email'] ?? '', 'Email') ?><span id="contactSeparator"> | </span><?= editable('phone_number', $contact['phone_number'] ?? '', 'Phone number') ?><span id="linkSeparator" class="qrsume-branding-preview-item"> | </span><a id="qrsumePreviewLink" class="sheet-link qrsume-branding-preview-item" href="<?= e($profileUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($profileText) ?></a></div>
+              <?= editable('personal_profession', $profession, 'Job title (optional)', 'sheet-profession', 'div') ?>
+              <div class="sheet-contact"><?= editable('email', $contact['email'] ?? $account['email'] ?? '', 'Email') ?><span id="contactSeparator"> | </span><?= editable('phone_number', $contact['phone_number'] ?? '', 'Phone number') ?></div>
+              <div class="sheet-contact" id="webLinks" data-count="<?= count($webLinks) ?>" title="LinkedIn and GitHub come from your profile (create_resume form, Contact step)"><?php foreach ($webLinks as $index => [$linkText, $linkUrl]): ?><?= $index > 0 ? '<span> | </span>' : '' ?><a class="sheet-link" href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($linkText) ?></a><?php endforeach; ?><span id="linkSeparator" class="qrsume-branding-preview-item"> | </span><a id="qrsumePreviewLink" class="sheet-link qrsume-branding-preview-item" href="<?= e($profileUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($profileText) ?></a></div>
             </div>
           </header>
 
           <section class="sheet-section sheet-bio" id="bioSection">
+            <?= sectionHeading('summary', $sectionTitles[$resumeLanguage]['summary']) ?>
             <?= editable('personal_bio', $personal['personal_bio'] ?? '', 'Write a short professional bio...', 'pb sheet-text', 'div', true) ?>
           </section>
 
@@ -1401,15 +1390,15 @@ function renderGridRows(array $items): string
 
           <section class="sheet-section" id="skillsSection" data-resume-section="skills">
             <?= sectionHeading('skills', $sectionTitles[$resumeLanguage]['skills'], 'skills') ?>
-            <div class="sheet-list sheet-grid" data-list="skills" data-next-index="<?= count($skills) ?>">
-              <?= renderGridRows(array_map(fn($index, $skill) => renderSkillItem((string) $index, $skill), array_keys($skills), $skills)) ?>
+            <div class="pb sheet-text sheet-list sheet-inline" data-list="skills" data-next-index="<?= count($skills) ?>">
+              <?= implode('', array_map(fn($index, $skill) => renderSkillItem((string) $index, $skill), array_keys($skills), $skills)) ?>
             </div>
           </section>
 
           <section class="sheet-section" id="languagesSection" data-resume-section="languages">
             <?= sectionHeading('languages', $sectionTitles[$resumeLanguage]['languages'], 'languages') ?>
-            <div class="sheet-list sheet-grid" data-list="languages" data-next-index="<?= count($languages) ?>">
-              <?= renderGridRows(array_map(fn($index, $lang) => renderLanguageItem((string) $index, $lang), array_keys($languages), $languages)) ?>
+            <div class="pb sheet-text sheet-list sheet-inline" data-list="languages" data-next-index="<?= count($languages) ?>">
+              <?= implode('', array_map(fn($index, $lang) => renderLanguageItem((string) $index, $lang), array_keys($languages), $languages)) ?>
             </div>
           </section>
 
@@ -1572,17 +1561,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Entries: add, remove, move
   // ---------------------------------------------------------------------------
 
-  function regroupGrid(list) {
-    const items = [...list.querySelectorAll('.sheet-grid-item')];
-    list.replaceChildren();
-    for (let i = 0; i < items.length; i += 2) {
-      const row = document.createElement('div');
-      row.className = 'pb sheet-grid-row';
-      row.append(...items.slice(i, i + 2));
-      list.append(row);
-    }
-  }
-
   function addEntry(type) {
     const list = resumePreview.querySelector(`[data-list="${type}"]`);
     const template = document.getElementById(`tpl-${type}`);
@@ -1596,10 +1574,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const entry = holder.firstElementChild;
     setupEditables(entry);
     list.append(entry);
-
-    if (list.classList.contains('sheet-grid')) {
-      regroupGrid(list);
-    }
 
     // Adding to a hidden section makes no sense: show it
     const toggle = document.querySelector(`[data-section="${type}"] input[type="checkbox"]`);
@@ -1640,10 +1614,6 @@ document.addEventListener('DOMContentLoaded', () => {
       siblings[position + 1].after(entry);
     }
 
-    if (list.classList.contains('sheet-grid')) {
-      regroupGrid(list);
-    }
-
     contentChanged();
   });
 
@@ -1674,7 +1644,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const email = fieldValue(fieldByName('email'));
     const phone = fieldValue(fieldByName('phone_number'));
     contactSeparator.hidden = !(email && phone);
-    linkSeparator.hidden = !(brandingIsShown() && (email || phone));
+
+    // Second contact line: LinkedIn, GitHub and the QRsume link
+    const webLinks = document.getElementById('webLinks');
+    const profileLinks = Number(webLinks.dataset.count || 0);
+    linkSeparator.hidden = !(brandingIsShown() && profileLinks > 0);
+    webLinks.hidden = !(profileLinks > 0 || brandingIsShown());
+
+    resumePreview.querySelectorAll('.meta-sep').forEach(separator => {
+      separator.hidden = !(fieldValue(separator.previousElementSibling) && fieldValue(separator.nextElementSibling));
+    });
 
     // An empty level shows as a placeholder while editing, without the brackets the PDF leaves out
     resumePreview.querySelectorAll('.level-open').forEach(open => {
@@ -1749,17 +1728,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function layoutPages() {
     resumePreview.querySelectorAll('.pb-spacer').forEach(spacer => spacer.remove());
 
-    // A wrapped title row is one date cell plus a fixed 15pt in the PDF, whatever the text height
-    resumePreview.querySelectorAll('.sheet-row').forEach(row => {
-      row.style.height = '';
-      const title = row.querySelector('.sheet-row-title');
-      if (!row.offsetParent || !title) return;
-
-      const lines = Math.round(title.offsetHeight / parseFloat(getComputedStyle(title).lineHeight));
-      if (lines > 1) {
-        row.style.height = `${parseFloat(getComputedStyle(row).minHeight) + 15 * PT}px`;
-      }
-    });
+    // Next to the photo, the name and contact lines are centered vertically on its 78pt height
+    const headerText = sheetHeader.querySelector('.sheet-header-text');
+    headerText.style.paddingTop = '';
+    if (sheetHeader.classList.contains('has-photo')) {
+      headerText.style.paddingTop = `${Math.max(0, (78 * PT - headerText.offsetHeight) / 2)}px`;
+    }
 
     const origin = stack.getBoundingClientRect().top;
     let contentBottom = 0;

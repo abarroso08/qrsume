@@ -91,9 +91,14 @@ try {
     $stmt->execute([$user_id]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $stmt = $pdo->prepare("SELECT personal_photo FROM personalinfo WHERE user_id = ?");
+    $stmt = $pdo->prepare("SELECT personal_photo, personal_profession FROM personalinfo WHERE user_id = ?");
     $stmt->execute([$user_id]);
-    $storedPhoto = (string) ($stmt->fetchColumn() ?: '');
+    $storedPersonal = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $storedPhoto = (string) ($storedPersonal['personal_photo'] ?? '');
+
+    $stmt = $pdo->prepare("SELECT linkedin, github FROM contactinfo WHERE user_id = ?");
+    $stmt->execute([$user_id]);
+    $storedContact = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     // ========== GET POST DATA ==========
     $fontName = isset($_POST['font']) && in_array($_POST['font'], ['times', 'helvetica']) ? $_POST['font'] : 'times';
@@ -121,6 +126,9 @@ try {
     $contact['phone_number']       = $_POST['phone_number'] ?? '';
 
     $personal["personal_bio"] = $_POST['personal_bio'] ?? '';
+    $personal['personal_profession'] = resumeRealValue((string) ($_POST['personal_profession'] ?? $storedPersonal['personal_profession'] ?? ''));
+    $contact['linkedin'] = resumeRealValue((string) ($_POST['linkedin'] ?? $storedContact['linkedin'] ?? ''));
+    $contact['github'] = resumeRealValue((string) ($_POST['github'] ?? $storedContact['github'] ?? ''));
     $education  = resumeEntries($_POST['education'] ?? [], ['name_of_studies', 'date', 'place_of_study', 'desc']);
     $experience = resumeEntries($_POST['experience'] ?? [], ['job_name', 'place_of_work', 'date', 'brief_description']);
     $skills     = resumeEntries($_POST['skills'] ?? [], ['aptitude']);
@@ -164,16 +172,38 @@ $hasPhoto = $photoData !== null || ($pageCountOnly && $display_photo && isset($_
 // Include TCPDF
 require 'vendor/autoload.php';
 
+/**
+ * TCPDF writes an invisible "Powered by TCPDF (www.tcpdf.org)" line on the last page,
+ * which recruiting software reads as part of the CV.
+ */
+class ResumePdf extends TCPDF
+{
+    public function __construct(...$arguments)
+    {
+        parent::__construct(...$arguments);
+        $this->tcpdflink = false;
+    }
+}
+
 
 
 $username = $user['username'];
 // Create PDF
-$pdf = new TCPDF('P', 'pt', 'A4', true, 'UTF-8', false);
+$pdf = new ResumePdf('P', 'pt', 'A4', true, 'UTF-8', false);
 
-// Document settings
-$pdf->SetCreator('TCPDF');
-$pdf->SetAuthor($personal['personal_name']);
-$pdf->SetTitle("Resume - " . $personal['personal_name']);
+// Document properties: recruiting software and AI screeners read these
+$language = resumeLanguage();
+$fullName = trim($personal['personal_name'] . ' ' . $personal['personal_lastname']);
+$documentWord = $language === 'es' ? 'Currículum' : 'Resume';
+$pdf->SetCreator('QRsume');
+$pdf->SetAuthor($fullName);
+$pdf->SetTitle(implode(' - ', array_filter([$fullName, $personal['personal_profession'], $documentWord])));
+$pdf->SetSubject($personal['personal_profession'] !== '' ? $personal['personal_profession'] : $documentWord);
+$pdf->SetKeywords(implode(', ', array_slice(array_values(array_filter(array_merge(
+    array_map(fn(array $skill) => trim($skill['aptitude']), $skills),
+    array_map(fn(array $lang) => trim($lang['language']), $languages)
+))), 0, 40)));
+$pdf->setLanguageArray(['a_meta_charset' => 'UTF-8', 'a_meta_dir' => 'ltr', 'a_meta_language' => $language, 'w_page' => 'page']);
 
 // Disable header/footer
 $pdf->setPrintHeader(false);
@@ -206,10 +236,10 @@ $spaceList = 0.1 * $spaceSize;
 //VARIABLES
 $header_position = "C";
 
-$languages_dots = "• ";
 
 $titles = array_map('mb_strtoupper', resumeSectionTitles(resumeLanguage()));
 $titles['full_profile'] = resumeSectionTitles(resumeLanguage())['full_profile'];
+$titles['summary'] = mb_strtoupper(resumeSectionTitles(resumeLanguage())['summary']);
 foreach (resumeSectionTitleOverrides() as $key => $title) {
     $titles[$key] = mb_strtoupper($title);
 }
@@ -230,7 +260,36 @@ $headerWidth = $pageWidth - $marginL - $marginR;
 $photoWidth = 66;
 $photoHeight = 78;
 $nameHeight = $nameFontSize * 1.25; // TCPDF never makes a cell shorter than font size x 1.25
+$professionFontSize = $contentFontSize * 1.2;
+$professionHeight = $professionFontSize * 1.25;
 $contactHeight = $contentFontSize + 4;
+
+// Contact lines as plain text (what parsers read) that are also links
+$contactLines = [];
+$directLine = [];
+if (trim($contact['email']) !== '') {
+    $directLine[] = [trim($contact['email']), 'mailto:' . trim($contact['email']), false];
+}
+if (trim($contact['phone_number']) !== '') {
+    $directLine[] = [trim($contact['phone_number']), 'tel:' . preg_replace('/[^\d+]/', '', $contact['phone_number']), false];
+}
+if ($directLine !== []) {
+    $contactLines[] = $directLine;
+}
+$webLine = [];
+foreach (['linkedin', 'github'] as $network) {
+    if ($contact[$network] !== '') {
+        $webLine[] = [resumeLinkText($contact[$network]), resumeLinkUrl($contact[$network]), true];
+    }
+}
+if ($display_branding) {
+    $webLine[] = [$profileText, $profileUrl, true];
+}
+if ($webLine !== []) {
+    $contactLines[] = $webLine;
+}
+
+$textBlockHeight = $nameHeight + ($personal['personal_profession'] !== '' ? $professionHeight : 0) + count($contactLines) * $contactHeight;
 
 if ($hasPhoto) {
     if ($photoData !== null) {
@@ -243,50 +302,42 @@ if ($hasPhoto) {
     $header_position = "L";
     $headerX += $photoWidth + 12;
     $headerWidth -= $photoWidth + 12;
-    $pdf->SetY($headerTop + max(0, ($photoHeight - $nameHeight - $contactHeight) / 2));
+    $pdf->SetY($headerTop + max(0, ($photoHeight - $textBlockHeight) / 2));
 }
 
 $pdf->SetFont($fontName, 'B', $nameFontSize);
 $pdf->SetX($headerX);
-$pdf->Cell($headerWidth, $nameHeight, trim($personal['personal_name'] . ' ' . $personal['personal_lastname']), 0, 1, $header_position, false, '', 1);
+$pdf->Cell($headerWidth, $nameHeight, $fullName, 0, 1, $header_position, false, '', 1);
 
-$pdf->SetFont($fontName, '', $contentFontSize);
-
-$contactParts = array_values(array_filter(
-    [trim($contact['email']), trim($contact['phone_number'])],
-    static fn(string $part): bool => $part !== ''
-));
-$contactInfo = implode(' | ', $contactParts);
-$linkText = '';
-if ($display_branding) {
-    $linkText = $profileText;
-    if ($contactInfo !== '') {
-        $contactInfo .= ' | ';
-    }
-}
-
-// Medir anchos
-$contactWidth = $pdf->GetStringWidth($contactInfo);
-$linkWidth = $pdf->GetStringWidth($linkText);
-$totalWidth = $contactWidth + $linkWidth;
-
-// Calcular X: centrado sin foto, alineado a la izquierda junto a la foto
-$pdf->SetX($header_position === "L" ? $headerX : $headerX + max(0, ($headerWidth - $totalWidth) / 2));
-
-// Escribir parte en negro
-$pdf->SetTextColor(0, 0, 0);
-if ($contactInfo !== '') {
-    $pdf->Cell($contactWidth, $contactHeight, $contactInfo, 0, 0);
-}
-
-// Escribir parte azul como link
-if ($linkText !== '') {
-    $pdf->SetTextColor(0, 0, 255);
-    $pdf->Cell($linkWidth, $contactHeight, $linkText, 0, 0, 'L', false, $profileUrl);
+if ($personal['personal_profession'] !== '') {
+    $pdf->SetFont($fontName, '', $professionFontSize);
+    $pdf->SetTextColor(60, 60, 60);
+    $pdf->SetX($headerX);
+    $pdf->Cell($headerWidth, $professionHeight, $personal['personal_profession'], 0, 1, $header_position, false, '', 1);
     $pdf->SetTextColor(0, 0, 0);
 }
 
-$pdf->Ln($contactHeight);
+$pdf->SetFont($fontName, '', $contentFontSize);
+$separator = ' | ';
+foreach ($contactLines as $line) {
+    $width = 0;
+    foreach ($line as $index => [$text]) {
+        $width += $pdf->GetStringWidth($text) + ($index > 0 ? $pdf->GetStringWidth($separator) : 0);
+    }
+    // Centered without a photo, left-aligned next to it
+    $pdf->SetX($header_position === "L" ? $headerX : $headerX + max(0, ($headerWidth - $width) / 2));
+
+    foreach ($line as $index => [$text, $url, $isWebLink]) {
+        if ($index > 0) {
+            $pdf->SetTextColor(0, 0, 0);
+            $pdf->Cell($pdf->GetStringWidth($separator), $contactHeight, $separator, 0, 0, 'L', false, '', 0, false, 'T', 'M');
+        }
+        $isWebLink ? $pdf->SetTextColor(0, 0, 255) : $pdf->SetTextColor(0, 0, 0);
+        $pdf->Cell($pdf->GetStringWidth($text), $contactHeight, $text, 0, 0, 'L', false, $url, 0, false, 'T', 'M');
+    }
+    $pdf->SetTextColor(0, 0, 0);
+    $pdf->Ln($contactHeight);
+}
 
 if ($hasPhoto) {
     $pdf->SetY(max($pdf->GetY(), $headerTop + $photoHeight + 5));
@@ -295,14 +346,6 @@ if ($hasPhoto) {
 $pdf->SetLineStyle(array('width' => 1, 'color' => array(0, 0, 0)));
 
 
-//=========== PERSONAL BIO ========
-if ($personalBio && trim($personal['personal_bio']) !== '') {
-    $pdf->SetFont($fontName, '', $contentFontSize);
-    $pdf->Ln(10);
-    $pdf->MultiCell(0, 15, "{$personal['personal_bio']}", 0, 'L');
-    $pdf->Ln($spaceSection);
-}
-
 function printSectionTitle(TCPDF $pdf, string $title, string $fontName, float $sectionFontSize, float $marginL, float $marginR, float $pageWidth, float $spaceTitle): void
 {
     $pdf->SetFont($fontName, 'B', $sectionFontSize);
@@ -310,6 +353,27 @@ function printSectionTitle(TCPDF $pdf, string $title, string $fontName, float $s
     $pdf->Line($marginL, $pdf->GetY(), $pageWidth - $marginR, $pdf->GetY());
     $pdf->Ln($spaceTitle);
 }
+
+/**
+ * A grey line under an entry title (dates, school): read right after the title it belongs to.
+ */
+function printMetaLine(TCPDF $pdf, string $text, string $fontName, float $contentFontSize): void
+{
+    $pdf->SetFont($fontName, '', $contentFontSize);
+    $pdf->SetTextColor(80, 80, 80);
+    $pdf->MultiCell(0, 15, $text, 0, 'L');
+    $pdf->SetTextColor(0, 0, 0);
+}
+
+//=========== PERSONAL BIO ========
+if ($personalBio && trim($personal['personal_bio']) !== '') {
+    $pdf->Ln(10);
+    printSectionTitle($pdf, $titles['summary'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
+    $pdf->SetFont($fontName, '', $contentFontSize);
+    $pdf->MultiCell(0, 15, "{$personal['personal_bio']}", 0, 'L');
+    $pdf->Ln($spaceSection);
+}
+
 
 // ========== SECTIONS (in the order chosen in the preview) ==========
 foreach ($sectionOrder as $sectionKey) {
@@ -324,17 +388,13 @@ foreach ($sectionOrder as $sectionKey) {
 
             foreach ($education as $edu) {
                 $pdf->SetFont($fontName, 'B', $titleFontSize);
-                $pdf->MultiCell($pageWidth * 3 / 4, 15, "{$edu['name_of_studies']}", 0, 'L', 0, 0, '', '', true);
-                $pdf->Cell(0, 15, "{$edu['date']}", 0, 1, 'R');
+                $pdf->MultiCell(0, 15, $edu['name_of_studies'], 0, 'L');
 
-                // Estimate lines
-                $lines = $pdf->getNumLines("{$edu['name_of_studies']}", ($pageWidth * 3 / 4) - 15);
-                if ($lines > 1) {
-                    $pdf->setXY($pdf->GetX(), $pdf->GetY() + 15);
+                $meta = implode(' | ', array_filter([trim($edu['place_of_study']), trim($edu['date'])], 'strlen'));
+                if ($meta !== '') {
+                    printMetaLine($pdf, $meta, $fontName, $contentFontSize);
                 }
-
                 $pdf->SetFont($fontName, '', $contentFontSize);
-                $pdf->MultiCell(0, 15, "{$edu['place_of_study']}", 0, 'L');
 
                 // Show description if enabled
                 if (!empty($showDescription) && !empty($edu['desc'])) {
@@ -357,15 +417,10 @@ foreach ($sectionOrder as $sectionKey) {
             foreach ($experience as $exp) {
                 $pdf->SetFont($fontName, 'B', $titleFontSize);
 
-                // "Job title - Company"
-                $jobTitle = resumeJobTitle($exp);
-                $pdf->MultiCell($pageWidth * 3 / 4, 15, $jobTitle, 0, 'L', 0, 0, '', '', true);
-                $pdf->Cell(0, 15, "{$exp['date']}", 0, 1, 'R');
-
-                // Adjust vertical position if job title wraps
-                $lines = $pdf->getNumLines($jobTitle, ($pageWidth * 3 / 4) - 30);
-                if ($lines > 1) {
-                    $pdf->setXY($pdf->GetX(), $pdf->GetY() + 15);
+                // "Job title - Company", then the dates on their own line
+                $pdf->MultiCell(0, 15, resumeJobTitle($exp), 0, 'L');
+                if (trim($exp['date']) !== '') {
+                    printMetaLine($pdf, trim($exp['date']), $fontName, $contentFontSize);
                 }
                 $pdf->Ln($spaceList);
                 $pdf->SetFont($fontName, '', $contentFontSize);
@@ -384,19 +439,7 @@ foreach ($sectionOrder as $sectionKey) {
             }
             printSectionTitle($pdf, $titles['skills'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
             $pdf->SetFont($fontName, '', $contentFontSize);
-            $counter = 1;
-            foreach ($skills as $skill) {
-                if ($counter == 1) {
-                    $pdf->Cell($pageWidth / 2, 15, "• " . $skill['aptitude'], 0, 0, 'L');
-                    $counter++;
-                } else {
-                    $pdf->Cell($pageWidth / 2, 15, "• " . $skill['aptitude'], 0, 1, 'L');
-                    $counter = 1;
-                }
-            }
-            if ($counter == 2) {
-                $pdf->Ln(15);
-            }
+            $pdf->MultiCell(0, 15, implode(', ', array_filter(array_map(fn(array $skill) => trim($skill['aptitude']), $skills), 'strlen')), 0, 'L');
             $pdf->Ln($spaceSection);
             break;
 
@@ -407,20 +450,7 @@ foreach ($sectionOrder as $sectionKey) {
             }
             printSectionTitle($pdf, $titles['languages'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
             $pdf->SetFont($fontName, '', $contentFontSize);
-            $counterLang = 1;
-            foreach ($languages as $lang) {
-                $text = $languages_dots . resumeLanguageLine($lang);
-                if ($counterLang == 1) {
-                    $pdf->Cell($pageWidth / 2, 15, $text, 0, 0, 'L');
-                    $counterLang++;
-                } else {
-                    $pdf->Cell($pageWidth / 2, 15, $text, 0, 1, 'L');
-                    $counterLang = 1;
-                }
-            }
-            if ($counterLang == 2) {
-                $pdf->Ln(15);
-            }
+            $pdf->MultiCell(0, 15, implode(', ', array_filter(array_map('resumeLanguageLine', $languages), 'strlen')), 0, 'L');
             $pdf->Ln($spaceSection);
             break;
 

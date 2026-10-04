@@ -17,6 +17,7 @@ const RESUME_SECTION_TITLES = [
         'skills'       => 'Skills',
         'languages'    => 'Languages',
         'projects'     => 'Projects',
+        'summary'      => 'Summary',
         'full_profile' => 'Full Profile & Projects',
     ],
     'es' => [
@@ -25,6 +26,7 @@ const RESUME_SECTION_TITLES = [
         'skills'       => 'Aptitudes',
         'languages'    => 'Idiomas',
         'projects'     => 'Proyectos',
+        'summary'      => 'Perfil profesional',
         'full_profile' => 'Perfil Completo y Proyectos',
     ],
 ];
@@ -56,7 +58,7 @@ function resumeSectionTitleOverrides(): array
     $overrides = [];
     foreach ((array) ($_POST['section_titles'] ?? []) as $key => $title) {
         $title = trim((string) $title);
-        if (in_array($key, RESUME_BUILT_IN_SECTIONS, true) && $title !== '') {
+        if ((in_array($key, RESUME_BUILT_IN_SECTIONS, true) || $key === 'summary') && $title !== '') {
             $overrides[$key] = mb_substr($title, 0, 80);
         }
     }
@@ -116,6 +118,31 @@ function resumeCanRemoveBranding(PDO $db, int $userId, string $username): bool
 function resumeShowBranding(PDO $db, int $userId, string $username): bool
 {
     return !resumeCanRemoveBranding($db, $userId, $username) || isset($_POST['show_QR']);
+}
+
+/**
+ * The value, or '' when it is one of the sample values a new account starts with.
+ */
+function resumeRealValue(string $value): string
+{
+    $samples = ['Your Profession', 'https://github.com/yourusername', 'https://linkedin.com/in/yourusername', 'https://twitter.com/yourusername'];
+    $value = trim($value);
+
+    return in_array($value, $samples, true) ? '' : $value;
+}
+
+/**
+ * "https://www.linkedin.com/in/ana/" -> "linkedin.com/in/ana": short, and still read as a link.
+ */
+function resumeLinkText(string $url): string
+{
+    return rtrim((string) preg_replace('#^(https?://)?(www\.)?#i', '', trim($url)), '/');
+}
+
+function resumeLinkUrl(string $url): string
+{
+    $url = trim($url);
+    return preg_match('#^https?://#i', $url) ? $url : 'https://' . $url;
 }
 
 /**
