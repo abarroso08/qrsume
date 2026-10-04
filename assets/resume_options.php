@@ -132,20 +132,6 @@ function resumeRealValue(string $value): string
 }
 
 /**
- * "https://www.linkedin.com/in/ana/" -> "linkedin.com/in/ana": short, and still read as a link.
- */
-function resumeLinkText(string $url): string
-{
-    return rtrim((string) preg_replace('#^(https?://)?(www\.)?#i', '', trim($url)), '/');
-}
-
-function resumeLinkUrl(string $url): string
-{
-    $url = trim($url);
-    return preg_match('#^https?://#i', $url) ? $url : 'https://' . $url;
-}
-
-/**
  * "Job title - Company", skipping empty parts.
  */
 function resumeJobTitle(array $experience): string

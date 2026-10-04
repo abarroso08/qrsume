@@ -115,15 +115,6 @@ $resumeLanguage = resumeLanguage();
 $sectionTitles = ['en' => resumeSectionTitles('en'), 'es' => resumeSectionTitles('es')];
 $profileUrl = 'https://qrsume.com/' . $username;
 $profileText = 'qrsume.com/' . $username;
-$profession = resumeRealValue((string) ($personal['personal_profession'] ?? ''));
-$webLinks = [];
-foreach (['linkedin', 'github'] as $network) {
-    $link = resumeRealValue((string) ($contact[$network] ?? ''));
-    if ($link !== '') {
-        $webLinks[] = [resumeLinkText($link), resumeLinkUrl($link)];
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Sheet rendering
 // -----------------------------------------------------------------------------
@@ -877,14 +868,6 @@ function renderGridRows(array $items): string
     white-space: nowrap;
   }
 
-  .sheet-profession {
-    padding: 0 var(--pad);
-    color: #3c3c3c;
-    font-size: calc(var(--c) * 1.2);
-    line-height: 1.25;
-    white-space: nowrap;
-  }
-
   /* Editable text */
   .ed {
     border-radius: 2px;
@@ -1388,9 +1371,8 @@ function renderGridRows(array $items): string
                 <?= editable('personal_name', $personal['personal_name'] ?? '', 'Name') ?>
                 <?= editable('personal_lastname', $personal['personal_lastname'] ?? '', 'Last name') ?>
               </div>
-              <?= editable('personal_profession', $profession, 'Job title (optional)', 'sheet-profession', 'div') ?>
-              <div class="sheet-contact"><?= editable('email', $contact['email'] ?? $account['email'] ?? '', 'Email') ?><span id="contactSeparator"> | </span><?= editable('phone_number', $contact['phone_number'] ?? '', 'Phone number') ?></div>
-              <div class="sheet-contact" id="webLinks" data-count="<?= count($webLinks) ?>" title="LinkedIn and GitHub come from your profile (create_resume form, Contact step)"><?php foreach ($webLinks as $index => [$linkText, $linkUrl]): ?><?= $index > 0 ? '<span> | </span>' : '' ?><a class="sheet-link" href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($linkText) ?></a><?php endforeach; ?><span id="linkSeparator" class="qrsume-branding-preview-item"> | </span><a id="qrsumePreviewLink" class="sheet-link qrsume-branding-preview-item" href="<?= e($profileUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($profileText) ?></a></div>
+              <div class="sheet-contact"><?= editable('email', $contact['email'] ?? $account['email'] ?? '', 'Email') ?><span id="contactSeparator"> | </span><?= editable('phone_number', $contact['phone_number'] ?? '', 'Phone number') ?><span id="linkSeparator" class="qrsume-branding-preview-item"> | </span><a id="qrsumePreviewLink" class="sheet-link qrsume-branding-preview-item" href="<?= e($profileUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($profileText) ?></a></div>
+
             </div>
           </header>
 
@@ -1692,12 +1674,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const email = fieldValue(fieldByName('email'));
     const phone = fieldValue(fieldByName('phone_number'));
     contactSeparator.hidden = !(email && phone);
-
-    // Second contact line: LinkedIn, GitHub and the QRsume link
-    const webLinks = document.getElementById('webLinks');
-    const profileLinks = Number(webLinks.dataset.count || 0);
-    linkSeparator.hidden = !(brandingIsShown() && profileLinks > 0);
-    webLinks.hidden = !(profileLinks > 0 || brandingIsShown());
+    linkSeparator.hidden = !(brandingIsShown() && (email || phone));
 
     // An empty level shows as a placeholder while editing, without the brackets the PDF leaves out
     resumePreview.querySelectorAll('.level-open').forEach(open => {

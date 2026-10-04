@@ -66,13 +66,9 @@ try {
     $stmt = $pdo->prepare('SELECT personal_profession FROM personalinfo WHERE user_id = ?');
     $stmt->execute([$user_id]);
     $storedProfession = (string) ($stmt->fetchColumn() ?: '');
-    $stmt = $pdo->prepare('SELECT linkedin, github FROM contactinfo WHERE user_id = ?');
-    $stmt->execute([$user_id]);
-    $storedContact = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $personal['personal_profession'] = resumeRealValue((string) ($_POST['personal_profession'] ?? $storedProfession));
-    $contact['linkedin'] = resumeRealValue((string) ($_POST['linkedin'] ?? $storedContact['linkedin'] ?? ''));
-    $contact['github'] = resumeRealValue((string) ($_POST['github'] ?? $storedContact['github'] ?? ''));
+
 
     $education       = $_POST['education'] ?? [];
     $experience       = $_POST['experience'] ?? [];
@@ -150,9 +146,6 @@ $tex .= "\\begin{document}\n\n";
 
 // ========== HEADER ==========
 $tex .= "{\\Huge\\bfseries " . latexEscape($fullName) . "}\\\\[0.3em]\n";
-if ($personal['personal_profession'] !== '') {
-    $tex .= "{\\large " . latexEscape($personal['personal_profession']) . "}\\\\[0.2em]\n";
-}
 $contactLine = [];
 if ($contact['email'] !== '') {
     $contactLine[] = '\\href{mailto:' . $contact['email'] . '}{' . latexEscape($contact['email']) . '}';
@@ -160,16 +153,10 @@ if ($contact['email'] !== '') {
 if ($contact['phone_number'] !== '') {
     $contactLine[] = latexEscape($contact['phone_number']);
 }
-$webLine = [];
-foreach (['linkedin', 'github'] as $network) {
-    if ($contact[$network] !== '') {
-        $webLine[] = '\\href{' . resumeLinkUrl($contact[$network]) . '}{' . latexEscape(resumeLinkText($contact[$network])) . '}';
-    }
-}
 if ($display_branding) {
-    $webLine[] = '\\href{' . $profileLink . '}{qrsume.com/' . latexEscape($username) . '}';
+    $contactLine[] = '\\href{' . $profileLink . '}{qrsume.com/' . latexEscape($username) . '}';
 }
-$tex .= implode(" \\\\\n", array_filter([implode(' $\\vert$ ', $contactLine), implode(' $\\vert$ ', $webLine)])) . "\n\n";
+$tex .= implode(' $\\vert$ ', $contactLine) . "\n\n";
 
 // ========== BIO ==========
 if ($personalBio && $personal['personal_bio'] !== '') {

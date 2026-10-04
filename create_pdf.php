@@ -96,9 +96,6 @@ try {
     $storedPersonal = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $storedPhoto = (string) ($storedPersonal['personal_photo'] ?? '');
 
-    $stmt = $pdo->prepare("SELECT linkedin, github FROM contactinfo WHERE user_id = ?");
-    $stmt->execute([$user_id]);
-    $storedContact = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     // ========== GET POST DATA ==========
     $fontName = isset($_POST['font']) && in_array($_POST['font'], ['times', 'helvetica']) ? $_POST['font'] : 'times';
@@ -127,8 +124,6 @@ try {
 
     $personal["personal_bio"] = $_POST['personal_bio'] ?? '';
     $personal['personal_profession'] = resumeRealValue((string) ($_POST['personal_profession'] ?? $storedPersonal['personal_profession'] ?? ''));
-    $contact['linkedin'] = resumeRealValue((string) ($_POST['linkedin'] ?? $storedContact['linkedin'] ?? ''));
-    $contact['github'] = resumeRealValue((string) ($_POST['github'] ?? $storedContact['github'] ?? ''));
     $education  = resumeEntries($_POST['education'] ?? [], ['name_of_studies', 'date', 'place_of_study', 'desc']);
     $experience = resumeEntries($_POST['experience'] ?? [], ['job_name', 'place_of_work', 'date', 'brief_description']);
     $skills     = resumeEntries($_POST['skills'] ?? [], ['aptitude']);
@@ -262,36 +257,21 @@ $headerWidth = $pageWidth - $marginL - $marginR;
 $photoWidth = 66;
 $photoHeight = 78;
 $nameHeight = $nameFontSize * 1.25; // TCPDF never makes a cell shorter than font size x 1.25
-$professionFontSize = $contentFontSize * 1.2;
-$professionHeight = $professionFontSize * 1.25;
 $contactHeight = $contentFontSize + 4;
 
-// Contact lines as plain text (what parsers read) that are also links
-$contactLines = [];
-$directLine = [];
+// One contact line: email | phone | qrsume link (email and phone are links too)
+$contactItems = [];
 if (trim($contact['email']) !== '') {
-    $directLine[] = [trim($contact['email']), 'mailto:' . trim($contact['email']), false];
+    $contactItems[] = [trim($contact['email']), 'mailto:' . trim($contact['email']), false];
 }
 if (trim($contact['phone_number']) !== '') {
-    $directLine[] = [trim($contact['phone_number']), 'tel:' . preg_replace('/[^\d+]/', '', $contact['phone_number']), false];
-}
-if ($directLine !== []) {
-    $contactLines[] = $directLine;
-}
-$webLine = [];
-foreach (['linkedin', 'github'] as $network) {
-    if ($contact[$network] !== '') {
-        $webLine[] = [resumeLinkText($contact[$network]), resumeLinkUrl($contact[$network]), true];
-    }
+    $contactItems[] = [trim($contact['phone_number']), 'tel:' . preg_replace('/[^\d+]/', '', $contact['phone_number']), false];
 }
 if ($display_branding) {
-    $webLine[] = [$profileText, $profileUrl, true];
-}
-if ($webLine !== []) {
-    $contactLines[] = $webLine;
+    $contactItems[] = [$profileText, $profileUrl, true];
 }
 
-$textBlockHeight = $nameHeight + ($personal['personal_profession'] !== '' ? $professionHeight : 0) + count($contactLines) * $contactHeight;
+$textBlockHeight = $nameHeight + $contactHeight;
 
 if ($hasPhoto) {
     if ($photoData !== null) {
@@ -311,35 +291,24 @@ $pdf->SetFont($fontName, 'B', $nameFontSize);
 $pdf->SetX($headerX);
 $pdf->Cell($headerWidth, $nameHeight, $fullName, 0, 1, $header_position, false, '', 1);
 
-if ($personal['personal_profession'] !== '') {
-    $pdf->SetFont($fontName, '', $professionFontSize);
-    $pdf->SetTextColor(60, 60, 60);
-    $pdf->SetX($headerX);
-    $pdf->Cell($headerWidth, $professionHeight, $personal['personal_profession'], 0, 1, $header_position, false, '', 1);
-    $pdf->SetTextColor(0, 0, 0);
-}
-
 $pdf->SetFont($fontName, '', $contentFontSize);
 $separator = ' | ';
-foreach ($contactLines as $line) {
-    $width = 0;
-    foreach ($line as $index => [$text]) {
-        $width += $pdf->GetStringWidth($text) + ($index > 0 ? $pdf->GetStringWidth($separator) : 0);
-    }
-    // Centered without a photo, left-aligned next to it
-    $pdf->SetX($header_position === "L" ? $headerX : $headerX + max(0, ($headerWidth - $width) / 2));
-
-    foreach ($line as $index => [$text, $url, $isWebLink]) {
-        if ($index > 0) {
-            $pdf->SetTextColor(0, 0, 0);
-            $pdf->Cell($pdf->GetStringWidth($separator), $contactHeight, $separator, 0, 0, 'L', false, '', 0, false, 'T', 'M');
-        }
-        $isWebLink ? $pdf->SetTextColor(0, 0, 255) : $pdf->SetTextColor(0, 0, 0);
-        $pdf->Cell($pdf->GetStringWidth($text), $contactHeight, $text, 0, 0, 'L', false, $url, 0, false, 'T', 'M');
-    }
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->Ln($contactHeight);
+$width = 0;
+foreach ($contactItems as $index => [$text]) {
+    $width += $pdf->GetStringWidth($text) + ($index > 0 ? $pdf->GetStringWidth($separator) : 0);
 }
+// Centered without a photo, left-aligned next to it
+$pdf->SetX($header_position === "L" ? $headerX : $headerX + max(0, ($headerWidth - $width) / 2));
+foreach ($contactItems as $index => [$text, $url, $isProfileLink]) {
+    if ($index > 0) {
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->Cell($pdf->GetStringWidth($separator), $contactHeight, $separator, 0, 0, 'L', false, '', 0, false, 'T', 'M');
+    }
+    $isProfileLink ? $pdf->SetTextColor(0, 0, 255) : $pdf->SetTextColor(0, 0, 0);
+    $pdf->Cell($pdf->GetStringWidth($text), $contactHeight, $text, 0, 0, 'L', false, $url, 0, false, 'T', 'M');
+}
+$pdf->SetTextColor(0, 0, 0);
+$pdf->Ln($contactHeight);
 
 if ($hasPhoto) {
     $pdf->SetY(max($pdf->GetY(), $headerTop + $photoHeight + 5));
