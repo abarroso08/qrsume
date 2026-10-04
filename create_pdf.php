@@ -236,6 +236,8 @@ $spaceList = 0.1 * $spaceSize;
 //VARIABLES
 $header_position = "C";
 
+$languages_dots = "• ";
+
 
 $titles = array_map('mb_strtoupper', resumeSectionTitles(resumeLanguage()));
 $titles['full_profile'] = resumeSectionTitles(resumeLanguage())['full_profile'];
@@ -355,14 +357,25 @@ function printSectionTitle(TCPDF $pdf, string $title, string $fontName, float $s
 }
 
 /**
- * A grey line under an entry title (dates, school): read right after the title it belongs to.
+ * Bold title (wrapping in the left three quarters) with the date at the right end of its first line.
+ * The date cell is as tall as one title line, so it sits on the title's baseline and text extraction
+ * reads "title ... date" as one line. The row keeps its previous height.
  */
-function printMetaLine(TCPDF $pdf, string $text, string $fontName, float $contentFontSize): void
+function printTitleRow(TCPDF $pdf, string $title, string $date, string $fontName, float $titleFontSize, float $pageWidth): void
 {
-    $pdf->SetFont($fontName, '', $contentFontSize);
-    $pdf->SetTextColor(80, 80, 80);
-    $pdf->MultiCell(0, 15, $text, 0, 'L');
-    $pdf->SetTextColor(0, 0, 0);
+    $pdf->SetFont($fontName, 'B', $titleFontSize);
+    $lineHeight = $titleFontSize * 1.25;
+    $pdf->MultiCell($pageWidth * 3 / 4, 15, $title, 0, 'L', false, 0, '', '', true);
+    $pdf->Cell(0, $lineHeight, $date, 0, 1, 'R');
+
+    // As before: a 15pt row (more for large fonts), plus 15pt when the title wraps
+    $extra = max(15, $lineHeight) - $lineHeight;
+    if ($pdf->getNumLines($title, $pageWidth * 3 / 4) > 1) {
+        $extra += 15;
+    }
+    if ($extra > 0) {
+        $pdf->Ln($extra);
+    }
 }
 
 //=========== PERSONAL BIO ========
@@ -387,14 +400,10 @@ foreach ($sectionOrder as $sectionKey) {
             printSectionTitle($pdf, $titles['education'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
 
             foreach ($education as $edu) {
-                $pdf->SetFont($fontName, 'B', $titleFontSize);
-                $pdf->MultiCell(0, 15, $edu['name_of_studies'], 0, 'L');
+                printTitleRow($pdf, $edu['name_of_studies'], $edu['date'], $fontName, $titleFontSize, $pageWidth);
 
-                $meta = implode(' | ', array_filter([trim($edu['place_of_study']), trim($edu['date'])], 'strlen'));
-                if ($meta !== '') {
-                    printMetaLine($pdf, $meta, $fontName, $contentFontSize);
-                }
                 $pdf->SetFont($fontName, '', $contentFontSize);
+                $pdf->MultiCell(0, 15, $edu['place_of_study'], 0, 'L');
 
                 // Show description if enabled
                 if (!empty($showDescription) && !empty($edu['desc'])) {
@@ -415,13 +424,8 @@ foreach ($sectionOrder as $sectionKey) {
             printSectionTitle($pdf, $titles['experience'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
 
             foreach ($experience as $exp) {
-                $pdf->SetFont($fontName, 'B', $titleFontSize);
-
-                // "Job title - Company", then the dates on their own line
-                $pdf->MultiCell(0, 15, resumeJobTitle($exp), 0, 'L');
-                if (trim($exp['date']) !== '') {
-                    printMetaLine($pdf, trim($exp['date']), $fontName, $contentFontSize);
-                }
+                // "Job title - Company" with the date at the right
+                printTitleRow($pdf, resumeJobTitle($exp), $exp['date'], $fontName, $titleFontSize, $pageWidth);
                 $pdf->Ln($spaceList);
                 $pdf->SetFont($fontName, '', $contentFontSize);
                 $pdf->SetX($pdf->GetX() + 10);
@@ -439,7 +443,19 @@ foreach ($sectionOrder as $sectionKey) {
             }
             printSectionTitle($pdf, $titles['skills'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
             $pdf->SetFont($fontName, '', $contentFontSize);
-            $pdf->MultiCell(0, 15, implode(', ', array_filter(array_map(fn(array $skill) => trim($skill['aptitude']), $skills), 'strlen')), 0, 'L');
+            $counter = 1;
+            foreach ($skills as $skill) {
+                if ($counter == 1) {
+                    $pdf->Cell($pageWidth / 2, 15, "• " . $skill['aptitude'], 0, 0, 'L');
+                    $counter++;
+                } else {
+                    $pdf->Cell($pageWidth / 2, 15, "• " . $skill['aptitude'], 0, 1, 'L');
+                    $counter = 1;
+                }
+            }
+            if ($counter == 2) {
+                $pdf->Ln(15);
+            }
             $pdf->Ln($spaceSection);
             break;
 
@@ -450,7 +466,20 @@ foreach ($sectionOrder as $sectionKey) {
             }
             printSectionTitle($pdf, $titles['languages'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
             $pdf->SetFont($fontName, '', $contentFontSize);
-            $pdf->MultiCell(0, 15, implode(', ', array_filter(array_map('resumeLanguageLine', $languages), 'strlen')), 0, 'L');
+            $counterLang = 1;
+            foreach ($languages as $lang) {
+                $text = $languages_dots . resumeLanguageLine($lang);
+                if ($counterLang == 1) {
+                    $pdf->Cell($pageWidth / 2, 15, $text, 0, 0, 'L');
+                    $counterLang++;
+                } else {
+                    $pdf->Cell($pageWidth / 2, 15, $text, 0, 1, 'L');
+                    $counterLang = 1;
+                }
+            }
+            if ($counterLang == 2) {
+                $pdf->Ln(15);
+            }
             $pdf->Ln($spaceSection);
             break;
 

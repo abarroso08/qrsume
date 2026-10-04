@@ -183,12 +183,11 @@ function sectionHeading(string $key, string $title, string $addType = ''): strin
 function renderEducationEntry(string $i, array $edu): string
 {
     return '<div class="sheet-entry" data-entry>' . entryTools()
-        . editable("education[$i][name_of_studies]", $edu['name_of_studies'] ?? '', 'Degree / studies', 'pb sheet-text sheet-entry-title', 'div')
-        . '<div class="pb sheet-text sheet-meta">'
-        . editable("education[$i][place_of_study]", $edu['place_of_study'] ?? '', 'Institution')
-        . '<span class="meta-sep"> | </span>'
-        . editable("education[$i][date]", $edu['date'] ?? '', 'Dates')
+        . '<div class="pb sheet-row">'
+        . editable("education[$i][name_of_studies]", $edu['name_of_studies'] ?? '', 'Degree / studies', 'sheet-row-title', 'div')
+        . editable("education[$i][date]", $edu['date'] ?? '', 'Date', 'sheet-row-date', 'div')
         . '</div>'
+        . editable("education[$i][place_of_study]", $edu['place_of_study'] ?? '', 'Institution', 'pb sheet-text', 'div')
         . editable("education[$i][desc]", $edu['brief_description'] ?? '', 'Description', 'pb sheet-text edu-desc', 'div', true)
         . '</div>';
 }
@@ -196,31 +195,31 @@ function renderEducationEntry(string $i, array $edu): string
 function renderExperienceEntry(string $i, array $exp): string
 {
     return '<div class="sheet-entry" data-entry>' . entryTools()
-        . '<div class="pb sheet-text sheet-entry-title">'
+        . '<div class="pb sheet-row"><div class="sheet-row-title">'
         . editable("experience[$i][job_name]", $exp['job_name'] ?? '', 'Job title')
         . '<span class="job-sep"> - </span>'
         . editable("experience[$i][place_of_work]", $exp['place_of_work'] ?? '', 'Company')
         . '</div>'
-        . editable("experience[$i][date]", $exp['date'] ?? '', 'Dates', 'pb sheet-text sheet-meta', 'div')
+        . editable("experience[$i][date]", $exp['date'] ?? '', 'Date', 'sheet-row-date', 'div')
+        . '</div>'
         . editable("experience[$i][brief_description]", $exp['brief_description'] ?? '', 'Describe your responsibilities and achievements', 'pb sheet-text sheet-indented', 'div', true)
         . '</div>';
 }
 
-// Skills and languages are one comma-separated paragraph, like the PDF
 function renderSkillItem(string $i, array $skill): string
 {
-    return '<span class="sheet-inline-item" data-entry>' . itemRemoveButton()
+    return '<div class="sheet-grid-item" data-entry>' . itemRemoveButton() . '• '
         . editable("skills[$i][aptitude]", $skill['aptitude'] ?? '', 'Skill')
-        . '<span class="inline-sep">, </span></span>';
+        . '</div>';
 }
 
 function renderLanguageItem(string $i, array $lang): string
 {
-    return '<span class="sheet-inline-item" data-entry>' . itemRemoveButton()
+    return '<div class="sheet-grid-item" data-entry>' . itemRemoveButton() . '• '
         . editable("languages[$i][language]", $lang['language'] ?? '', 'Language')
         . '<span class="level-open"> (</span>'
         . editable("languages[$i][level]", $lang['level'] ?? '', 'Level')
-        . '<span class="level-close">)</span><span class="inline-sep">, </span></span>';
+        . '<span class="level-close">)</span></div>';
 }
 
 function renderProjectEntry(string $i, array $project): string
@@ -233,6 +232,18 @@ function renderProjectEntry(string $i, array $project): string
         . '</div>';
 }
 
+/**
+ * Wrap two-column list items in rows of two, like the PDF prints them.
+ */
+function renderGridRows(array $items): string
+{
+    $html = '';
+    foreach (array_chunk($items, 2) as $row) {
+        $html .= '<div class="pb sheet-grid-row">' . implode('', $row) . '</div>';
+    }
+
+    return $html;
+}
 ?>
 
 <style>
@@ -823,18 +834,47 @@ function renderProjectEntry(string $i, array $project): string
     background: #000;
   }
 
-  /* Entry title (MultiCell, bold) and the grey line under it (dates, school) */
-  .sheet-entry-title {
+  /* Title row: MultiCell(3/4 page) + right-aligned date cell */
+  .sheet-row {
+    display: flex;
+    align-items: flex-start;
+    min-height: max(15pt, calc(var(--c) * 1.375));
     font-size: calc(var(--c) * 1.1);
     font-weight: 700;
   }
 
-  .sheet-meta {
-    color: #505050;
+  .sheet-experience .sheet-row {
+    margin-bottom: var(--space-list);
   }
 
-  .sheet-experience .sheet-meta {
-    margin-bottom: var(--space-list);
+  .sheet-row-title {
+    flex: 0 0 446.46pt;
+    width: 446.46pt;
+    padding: 0 var(--pad);
+    overflow-wrap: anywhere;
+  }
+
+  .sheet-row-date {
+    flex: 1;
+    min-width: 0;
+    padding: 0 var(--pad);
+    line-height: 1.25;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Two-column bullet lists: Cell(pageWidth / 2, 15) */
+  .sheet-grid-row {
+    display: grid;
+    grid-template-columns: 297.64pt minmax(0, 1fr);
+    height: 15pt;
+    line-height: 15pt;
+  }
+
+  .sheet-grid-item {
+    position: relative;
+    padding: 0 var(--pad);
+    white-space: nowrap;
   }
 
   .sheet-profession {
@@ -843,15 +883,6 @@ function renderProjectEntry(string $i, array $project): string
     font-size: calc(var(--c) * 1.2);
     line-height: 1.25;
     white-space: nowrap;
-  }
-
-  /* Skills and languages: one comma-separated paragraph */
-  .sheet-inline-item {
-    position: relative;
-  }
-
-  .sheet-inline-item:last-child .inline-sep {
-    display: none;
   }
 
   /* Editable text */
@@ -921,17 +952,15 @@ function renderProjectEntry(string $i, array $project): string
 
   .item-remove {
     position: absolute;
-    top: -15px;
+    top: 50%;
     left: 0;
-    width: 16px;
-    height: 16px;
-    font-size: 11px;
+    transform: translate(calc(-100% - 2px), -50%);
     opacity: 0;
     pointer-events: none;
   }
 
-  .sheet-inline-item:hover .item-remove,
-  .sheet-inline-item:focus-within .item-remove {
+  .sheet-grid-item:hover .item-remove,
+  .sheet-grid-item:focus-within .item-remove {
     opacity: 1;
     pointer-events: auto;
   }
@@ -1012,8 +1041,8 @@ function renderProjectEntry(string $i, array $project): string
     color: #adb5bd;
   }
 
-  .sheet-inline-item:not(:hover):not(:focus-within) .is-ghost,
-  .sheet-inline-item:not(:hover):not(:focus-within) .is-ghost-field {
+  .sheet-grid-item:not(:hover):not(:focus-within) .is-ghost,
+  .sheet-grid-item:not(:hover):not(:focus-within) .is-ghost-field {
     display: none;
   }
 
@@ -1390,15 +1419,15 @@ function renderProjectEntry(string $i, array $project): string
 
           <section class="sheet-section" id="skillsSection" data-resume-section="skills">
             <?= sectionHeading('skills', $sectionTitles[$resumeLanguage]['skills'], 'skills') ?>
-            <div class="pb sheet-text sheet-list sheet-inline" data-list="skills" data-next-index="<?= count($skills) ?>">
-              <?= implode('', array_map(fn($index, $skill) => renderSkillItem((string) $index, $skill), array_keys($skills), $skills)) ?>
+            <div class="sheet-list sheet-grid" data-list="skills" data-next-index="<?= count($skills) ?>">
+              <?= renderGridRows(array_map(fn($index, $skill) => renderSkillItem((string) $index, $skill), array_keys($skills), $skills)) ?>
             </div>
           </section>
 
           <section class="sheet-section" id="languagesSection" data-resume-section="languages">
             <?= sectionHeading('languages', $sectionTitles[$resumeLanguage]['languages'], 'languages') ?>
-            <div class="pb sheet-text sheet-list sheet-inline" data-list="languages" data-next-index="<?= count($languages) ?>">
-              <?= implode('', array_map(fn($index, $lang) => renderLanguageItem((string) $index, $lang), array_keys($languages), $languages)) ?>
+            <div class="sheet-list sheet-grid" data-list="languages" data-next-index="<?= count($languages) ?>">
+              <?= renderGridRows(array_map(fn($index, $lang) => renderLanguageItem((string) $index, $lang), array_keys($languages), $languages)) ?>
             </div>
           </section>
 
@@ -1561,6 +1590,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Entries: add, remove, move
   // ---------------------------------------------------------------------------
 
+  function regroupGrid(list) {
+    const items = [...list.querySelectorAll('.sheet-grid-item')];
+    list.replaceChildren();
+    for (let i = 0; i < items.length; i += 2) {
+      const row = document.createElement('div');
+      row.className = 'pb sheet-grid-row';
+      row.append(...items.slice(i, i + 2));
+      list.append(row);
+    }
+  }
+
   function addEntry(type) {
     const list = resumePreview.querySelector(`[data-list="${type}"]`);
     const template = document.getElementById(`tpl-${type}`);
@@ -1574,6 +1614,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const entry = holder.firstElementChild;
     setupEditables(entry);
     list.append(entry);
+
+    if (list.classList.contains('sheet-grid')) {
+      regroupGrid(list);
+    }
 
     // Adding to a hidden section makes no sense: show it
     const toggle = document.querySelector(`[data-section="${type}"] input[type="checkbox"]`);
@@ -1614,6 +1658,10 @@ document.addEventListener('DOMContentLoaded', () => {
       siblings[position + 1].after(entry);
     }
 
+    if (list.classList.contains('sheet-grid')) {
+      regroupGrid(list);
+    }
+
     contentChanged();
   });
 
@@ -1650,10 +1698,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const profileLinks = Number(webLinks.dataset.count || 0);
     linkSeparator.hidden = !(brandingIsShown() && profileLinks > 0);
     webLinks.hidden = !(profileLinks > 0 || brandingIsShown());
-
-    resumePreview.querySelectorAll('.meta-sep').forEach(separator => {
-      separator.hidden = !(fieldValue(separator.previousElementSibling) && fieldValue(separator.nextElementSibling));
-    });
 
     // An empty level shows as a placeholder while editing, without the brackets the PDF leaves out
     resumePreview.querySelectorAll('.level-open').forEach(open => {
@@ -1735,6 +1779,18 @@ document.addEventListener('DOMContentLoaded', () => {
       headerText.style.paddingTop = `${Math.max(0, (78 * PT - headerText.offsetHeight) / 2)}px`;
     }
 
+    // A wrapped title row is one date cell plus a fixed 15pt in the PDF, whatever the text height
+    resumePreview.querySelectorAll('.sheet-row').forEach(row => {
+      row.style.height = '';
+      const title = row.querySelector('.sheet-row-title');
+      if (!row.offsetParent || !title) return;
+
+      const lines = Math.round(title.offsetHeight / parseFloat(getComputedStyle(title).lineHeight));
+      if (lines > 1) {
+        row.style.height = `${parseFloat(getComputedStyle(row).minHeight) + 15 * PT}px`;
+      }
+    });
+
     const origin = stack.getBoundingClientRect().top;
     let contentBottom = 0;
 
@@ -1812,7 +1868,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pendingPhoto) data.set('photo_pending', '1');
 
     try {
-      const response = await fetch('create_pdf.php?page_count=1', { method: 'POST', body: data, credentials: 'same-origin' });
+      // Absolute on this origin: head.php's <base href="http://qrsume.com/"> would turn a relative URL into plain http
+      const response = await fetch(new URL('/create_pdf.php?page_count=1', window.location.origin), { method: 'POST', body: data, credentials: 'same-origin' });
       if (!response.ok) return;
 
       const result = await response.json();

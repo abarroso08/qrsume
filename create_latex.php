@@ -187,9 +187,8 @@ foreach ($sectionOrder as $sectionKey) {
             }
             $tex .= latexSection($titles['education']);
             foreach ($education as $edu) {
-                $tex .= "\\textbf{" . latexEscape($edu['name_of_studies'] ?? '') . "}\\\\\n";
-                $meta = implode(' | ', array_filter([trim($edu['place_of_study'] ?? ''), trim($edu['date'] ?? '')], 'strlen'));
-                $tex .= "{\\color{darkgray}" . latexEscape($meta) . "}\n\n";
+                $tex .= "\\textbf{" . latexEscape($edu['name_of_studies'] ?? '') . "} \\hfill " . latexEscape($edu['date'] ?? '') . "\\\\\n";
+                $tex .= latexEscape($edu['place_of_study'] ?? '') . "\n\n";
                 if ($showDescription && !empty($edu['desc'])) {
                     $tex .= latexEscape($edu['desc']) . "\n\n";
                 }
@@ -204,10 +203,7 @@ foreach ($sectionOrder as $sectionKey) {
             $tex .= latexSection($titles['experience']);
             foreach ($experience as $exp) {
                 $jobTitle = resumeJobTitle($exp);
-                $tex .= "\\textbf{" . latexEscape($jobTitle) . "}\\\\\n";
-                if (trim($exp['date'] ?? '') !== '') {
-                    $tex .= "{\\color{darkgray}" . latexEscape(trim($exp['date'])) . "}\\\\\n";
-                }
+                $tex .= "\\textbf{" . latexEscape($jobTitle) . "} \\hfill " . latexEscape($exp['date'] ?? '') . "\\\\\n";
                 $tex .= latexEscape($exp['brief_description'] ?? '') . "\n\n";
             }
             break;
@@ -218,7 +214,11 @@ foreach ($sectionOrder as $sectionKey) {
                 break;
             }
             $tex .= latexSection($titles['skills']);
-            $tex .= latexEscape(implode(', ', array_filter(array_map(fn(array $skill) => trim($skill['aptitude'] ?? ''), $skills), 'strlen'))) . "\n\n";
+            $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
+            foreach ($skills as $skill) {
+                $tex .= "\\item " . latexEscape($skill['aptitude'] ?? '') . "\n";
+            }
+            $tex .= "\\end{itemize}\n\n";
             break;
 
         // ========== LANGUAGES ==========
@@ -227,7 +227,11 @@ foreach ($sectionOrder as $sectionKey) {
                 break;
             }
             $tex .= latexSection($titles['languages']);
-            $tex .= latexEscape(implode(', ', array_filter(array_map('resumeLanguageLine', $languages), 'strlen'))) . "\n\n";
+            $tex .= "\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=0pt]\n";
+            foreach ($languages as $lang) {
+                $tex .= "\\item " . latexEscape(resumeLanguageLine($lang)) . "\n";
+            }
+            $tex .= "\\end{itemize}\n\n";
             break;
 
         // ========== PROJECTS / INTERESTS ==========
