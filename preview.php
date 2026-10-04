@@ -1377,7 +1377,6 @@ function renderGridRows(array $items): string
           </header>
 
           <section class="sheet-section sheet-bio" id="bioSection">
-            <?= sectionHeading('summary', $sectionTitles[$resumeLanguage]['summary']) ?>
             <?= editable('personal_bio', $personal['personal_bio'] ?? '', 'Write a short professional bio...', 'pb sheet-text', 'div', true) ?>
           </section>
 

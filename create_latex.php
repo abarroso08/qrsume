@@ -160,8 +160,7 @@ $tex .= implode(' $\\vert$ ', $contactLine) . "\n\n";
 
 // ========== BIO ==========
 if ($personalBio && $personal['personal_bio'] !== '') {
-    $tex .= latexSection(resumeSectionTitles(resumeLanguage())['summary'] ?? 'Summary');
-    $tex .= latexEscape($personal['personal_bio']) . "\n\n";
+    $tex .= "\\vspace{0.8em}\n" . latexEscape($personal['personal_bio']) . "\n\n";
 }
 
 // ========== SECTIONS (in the order chosen in the preview) ==========

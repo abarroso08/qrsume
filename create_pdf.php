@@ -236,7 +236,6 @@ $languages_dots = "• ";
 
 $titles = array_map('mb_strtoupper', resumeSectionTitles(resumeLanguage()));
 $titles['full_profile'] = resumeSectionTitles(resumeLanguage())['full_profile'];
-$titles['summary'] = mb_strtoupper(resumeSectionTitles(resumeLanguage())['summary']);
 foreach (resumeSectionTitleOverrides() as $key => $title) {
     $titles[$key] = mb_strtoupper($title);
 }
@@ -350,7 +349,6 @@ function printTitleRow(TCPDF $pdf, string $title, string $date, string $fontName
 //=========== PERSONAL BIO ========
 if ($personalBio && trim($personal['personal_bio']) !== '') {
     $pdf->Ln(10);
-    printSectionTitle($pdf, $titles['summary'], $fontName, $sectionFontSize, $marginL, $marginR, $pageWidth, $spaceTitle);
     $pdf->SetFont($fontName, '', $contentFontSize);
     $pdf->MultiCell(0, 15, "{$personal['personal_bio']}", 0, 'L');
     $pdf->Ln($spaceSection);

@@ -17,7 +17,6 @@ const RESUME_SECTION_TITLES = [
         'skills'       => 'Skills',
         'languages'    => 'Languages',
         'projects'     => 'Projects',
-        'summary'      => 'Summary',
         'full_profile' => 'Full Profile & Projects',
     ],
     'es' => [
@@ -26,7 +25,6 @@ const RESUME_SECTION_TITLES = [
         'skills'       => 'Aptitudes',
         'languages'    => 'Idiomas',
         'projects'     => 'Proyectos',
-        'summary'      => 'Perfil profesional',
         'full_profile' => 'Perfil Completo y Proyectos',
     ],
 ];
@@ -58,7 +56,7 @@ function resumeSectionTitleOverrides(): array
     $overrides = [];
     foreach ((array) ($_POST['section_titles'] ?? []) as $key => $title) {
         $title = trim((string) $title);
-        if ((in_array($key, RESUME_BUILT_IN_SECTIONS, true) || $key === 'summary') && $title !== '') {
+        if (in_array($key, RESUME_BUILT_IN_SECTIONS, true) && $title !== '') {
             $overrides[$key] = mb_substr($title, 0, 80);
         }
     }
